@@ -1,0 +1,14 @@
+{
+  "name": "kuvert",
+  "version": "0.1.0",
+  "description": "Kuvert — envelope budgeting service for the Schloss platform",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:api": "pnpm --filter api dev",
+    "dev:web": "pnpm --filter web dev",
+    "build": "pnpm --filter api build && pnpm --filter web build",
+    "db:generate": "pnpm --filter api db:generate",
+    "db:migrate": "pnpm --filter api db:migrate"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1783345218096,
+      "tag": "0000_smart_anita_blake",
+      "breakpoints": true
+    }
+  ]
+}

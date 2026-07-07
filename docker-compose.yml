@@ -1,0 +1,40 @@
+services:
+  kuvert-api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      DATABASE_PATH: /data/kuvert.db
+      SCHLUSSEL_JWKS_URL: ${SCHLUSSEL_JWKS_URL:-http://schlussel:4000/.well-known/jwks.json}
+      JWT_ISSUER: ${JWT_ISSUER:-schloss}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+    volumes:
+      - kuvert-data:/data
+    networks:
+      - schloss-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  kuvert-web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3002}:80"
+    networks:
+      - schloss-net
+    depends_on:
+      - kuvert-api
+
+volumes:
+  kuvert-data:
+
+networks:
+  schloss-net:
+    external: true
