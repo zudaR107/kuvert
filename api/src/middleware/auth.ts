@@ -3,7 +3,6 @@ import { jwtVerify, createRemoteJWKSet } from 'jose'
 import { eq } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { users } from '../db/schema.js'
-import { createId } from '@paralleldrive/cuid2'
 
 const JWKS_URL = process.env['SCHLUSSEL_JWKS_URL'] ?? 'http://localhost:4000/.well-known/jwks.json'
 const ISSUER = process.env['JWT_ISSUER'] ?? 'schlussel'

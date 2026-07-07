@@ -88,8 +88,6 @@ router.get('/:id/budget', async (c) => {
   })
 
   // To Be Budgeted = total income in period - total allocated
-  const income = txs
-    .filter((t) => t.type !== 'expense')
   const totalIncome = (await db.select().from(transactions)
     .where(and(eq(transactions.userId, user.id), eq(transactions.type, 'income'))))
     .filter((t) => t.date >= period.startDate && t.date <= period.endDate)
