@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
 
 // ── Users (mirrored from Schlüssel via JWT) ───────────────────────
 // We store only the user id from the JWT — no passwords here.

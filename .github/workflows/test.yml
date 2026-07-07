@@ -21,6 +21,7 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter api lint
       - run: pnpm --filter api test
 
   web:
@@ -38,4 +39,5 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web lint
       - run: pnpm --filter web test

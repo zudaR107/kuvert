@@ -4,14 +4,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 vi.mock('../db/index.js', async () => await import('./helpers/db.js'))
 vi.mock('../middleware/auth.js', async () => await import('./helpers/auth-mock.js'))
 
-import { cleanDb, sqlite } from './helpers/db.js'
+import { cleanDb } from './helpers/db.js'
 import { createTestApp } from './helpers/setup.js'
 
 const app = createTestApp()
 
 // ── Typed request helpers ──────────────────────────────────────────
 const H1 = { Authorization: 'Bearer test-token' }
-const H2 = { Authorization: 'Bearer user2-token' }
 const JSON_H1 = { ...H1, 'Content-Type': 'application/json' }
 
 const get = (path: string, headers = H1) => app.request(path, { headers })
