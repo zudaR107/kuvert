@@ -1,3 +1,7 @@
+# One-time setup, before first `docker compose up`:
+#   docker network create schloss-net
+# schlussel runs from its own repo (see schlussel/docker-compose.yml) and
+# must be on the same network for kuvert-api to reach it by hostname.
 services:
   kuvert-api:
     build:
