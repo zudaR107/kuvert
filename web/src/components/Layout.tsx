@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation } from '@tanstack/react-router'
+import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import {
   LayoutDashboard, Receipt, Target, CreditCard, Wallet,
   LogOut, Sun, Moon, Monitor, Coffee, Menu, X, ChevronLeft
@@ -25,6 +25,7 @@ const THEME_ICONS: Record<Theme, React.ReactNode> = {
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth()
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
   const [collapsed, setCollapsed] = useState(false)
@@ -144,7 +145,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
           {user && (
             <button
-              onClick={logout}
+              onClick={async () => { await logout(); navigate({ to: '/login' }) }}
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.625rem',
                 padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',
