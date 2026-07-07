@@ -2,6 +2,8 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { cors } from 'hono/cors'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { db } from './db/index.js'
 import { accountsRouter } from './features/accounts/router.js'
@@ -11,7 +13,13 @@ import { transactionsRouter } from './features/transactions/router.js'
 import { goalsRouter } from './features/goals/router.js'
 import { debtsRouter } from './features/debts/router.js'
 
-migrate(db, { migrationsFolder: './src/db/migrations' })
+// Resolved relative to this file so it works both in dev (src/index.ts,
+// migrations at src/db/migrations) and in the compiled build
+// (dist/index.js, migrations at dist/db/migrations) without a hardcoded
+// path that only matches one of the two.
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+migrate(db, { migrationsFolder: join(__dirname, 'db/migrations') })
 
 const ALLOWED_ORIGINS = (process.env['ALLOWED_ORIGINS'] ?? 'http://localhost:5174')
   .split(',').map((o) => o.trim())

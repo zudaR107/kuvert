@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Plus, Target } from 'lucide-react'
 import { api } from '../../lib/api'
 import { formatAmount } from '../../lib/format'
@@ -16,7 +16,6 @@ interface Goal {
 }
 
 export function GoalsPage() {
-  const qc = useQueryClient()
   const { data: goals = [], isLoading } = useQuery<Goal[]>({
     queryKey: ['goals'],
     queryFn: () => api.get('/goals'),
