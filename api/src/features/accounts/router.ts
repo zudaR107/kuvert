@@ -39,6 +39,17 @@ router.post('/', zValidator('json', accountSchema), async (c) => {
   return c.json(account, 201)
 })
 
+router.get('/:id', async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.param()
+
+  const account = await db.select().from(accounts)
+    .where(and(eq(accounts.id, id), eq(accounts.userId, user.id))).get()
+  if (!account) return c.json({ error: 'Not found' }, 404)
+
+  return c.json(account)
+})
+
 router.put('/:id', zValidator('json', accountSchema.partial()), async (c) => {
   const user = c.get('user')
   const { id } = c.req.param()

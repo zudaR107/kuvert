@@ -54,8 +54,9 @@ export function LoginPage() {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
           <div>
-            <label className="label">Email</label>
+            <label className="label" htmlFor="login-email">Email</label>
             <input
+              id="login-email"
               className="input"
               type="email"
               value={email}
@@ -66,8 +67,9 @@ export function LoginPage() {
             />
           </div>
           <div>
-            <label className="label">Пароль</label>
+            <label className="label" htmlFor="login-password">Пароль</label>
             <input
+              id="login-password"
               className="input"
               type="password"
               value={password}
