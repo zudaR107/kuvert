@@ -216,3 +216,158 @@ describe('GET /goals/:id/contributions', () => {
     expect((await get('/goals/nope/contributions')).status).toBe(404)
   })
 })
+
+// ── Recurring goal regeneration ────────────────────────────────────
+// Every call to GET /goals checks completed (currentAmount >= targetAmount),
+// non-archived, recurring goals and — when due — archives the old row and
+// spins up a fresh cycle in the same response.
+
+/** Fully fund a goal via a single contribution so currentAmount === targetAmount. */
+async function completeGoal(goal: any, acct: any) {
+  const res = await post(`/goals/${goal.id}/contribute`, {
+    accountId: acct.id,
+    amount: goal.targetAmount,
+    date: '2026-07-01',
+  })
+  expect(res.status).toBe(201)
+}
+
+describe('recurring goal regeneration on GET /goals', () => {
+  it('archives a completed recurring goal with recurringDay: null and creates a fresh cycle', async () => {
+    const g = await mkGoal({ targetAmount: 1000, recurring: true, recurringDay: null, icon: 'star', color: '#123456' })
+    const acct = await mkAccount()
+    await completeGoal(g, acct)
+
+    const list = await (await get('/goals')).json() as any[]
+
+    // Old goal is archived → no longer returned by GET /goals.
+    expect(list.find((x: any) => x.id === g.id)).toBeUndefined()
+
+    // A new goal row exists carrying over name/icon/color/targetAmount/recurring/recurringDay.
+    const fresh = list.find((x: any) => x.name === g.name && x.id !== g.id)
+    expect(fresh).toBeTruthy()
+    expect(fresh.id).not.toBe(g.id)
+    expect(fresh.icon).toBe('star')
+    expect(fresh.color).toBe('#123456')
+    expect(fresh.targetAmount).toBe(1000)
+    expect(fresh.recurring).toBe(true)
+    expect(fresh.recurringDay).toBeNull()
+    expect(fresh.currentAmount).toBe(0)
+    expect(fresh.archived).toBe(false)
+  })
+
+  it('regenerates when recurringDay is <= today\'s day-of-month', async () => {
+    const today = new Date().getDate()
+    const dueDay = Math.min(today, 28)
+    const g = await mkGoal({ targetAmount: 1000, recurring: true, recurringDay: dueDay })
+    const acct = await mkAccount()
+    await completeGoal(g, acct)
+
+    const list = await (await get('/goals')).json() as any[]
+
+    expect(list.find((x: any) => x.id === g.id)).toBeUndefined()
+    const fresh = list.find((x: any) => x.name === g.name && x.id !== g.id)
+    expect(fresh).toBeTruthy()
+    expect(fresh.currentAmount).toBe(0)
+    expect(fresh.archived).toBe(false)
+    expect(fresh.recurringDay).toBe(dueDay)
+  })
+
+  const today = new Date().getDate()
+  const notYetDueDay = today + 1
+  const canRunNotYetDueTest = notYetDueDay <= 28
+
+  ;(canRunNotYetDueTest ? it : it.skip)(
+    'does not regenerate yet when recurringDay is later than today\'s day-of-month',
+    async () => {
+      const g = await mkGoal({ targetAmount: 1000, recurring: true, recurringDay: notYetDueDay })
+      const acct = await mkAccount()
+      await completeGoal(g, acct)
+
+      const list = await (await get('/goals')).json() as any[]
+
+      // Old goal is untouched: still present, still archived: false, still completed.
+      const found = list.find((x: any) => x.id === g.id)
+      expect(found).toBeTruthy()
+      expect(found.archived).toBe(false)
+      expect(found.currentAmount).toBe(1000)
+
+      // No fresh cycle was spun up.
+      expect(list.filter((x: any) => x.name === g.name)).toHaveLength(1)
+    },
+  )
+
+  it('does not touch a completed non-recurring goal', async () => {
+    const g = await mkGoal({ targetAmount: 1000, recurring: false })
+    const acct = await mkAccount()
+    await completeGoal(g, acct)
+
+    const list = await (await get('/goals')).json() as any[]
+
+    const found = list.find((x: any) => x.id === g.id)
+    expect(found).toBeTruthy()
+    expect(found.archived).toBe(false)
+    expect(found.currentAmount).toBe(1000)
+    // No second goal of the same name was created.
+    expect(list.filter((x: any) => x.name === g.name)).toHaveLength(1)
+  })
+
+  it('never touches a recurring goal that has not reached its target', async () => {
+    const g = await mkGoal({ targetAmount: 1000, recurring: true, recurringDay: null })
+    const acct = await mkAccount()
+    await post(`/goals/${g.id}/contribute`, { accountId: acct.id, amount: 400, date: '2026-07-01' })
+
+    const list = await (await get('/goals')).json() as any[]
+
+    const found = list.find((x: any) => x.id === g.id)
+    expect(found).toBeTruthy()
+    expect(found.archived).toBe(false)
+    expect(found.currentAmount).toBe(400)
+    expect(list.filter((x: any) => x.name === g.name)).toHaveLength(1)
+  })
+
+  it('carries over a non-null deadline onto the new cycle as a valid YYYY-MM-DD string', async () => {
+    const deadline = monthsFromNow(6)
+    const g = await mkGoal({ targetAmount: 1000, recurring: true, recurringDay: null, deadline })
+    const acct = await mkAccount()
+    await completeGoal(g, acct)
+
+    const list = await (await get('/goals')).json() as any[]
+    const fresh = list.find((x: any) => x.name === g.name && x.id !== g.id)
+
+    expect(fresh).toBeTruthy()
+    expect(fresh.deadline).toEqual(expect.any(String))
+    expect(fresh.deadline).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('leaves the new cycle\'s deadline null when the old goal had no deadline', async () => {
+    const g = await mkGoal({ targetAmount: 1000, recurring: true, recurringDay: null, deadline: null })
+    const acct = await mkAccount()
+    await completeGoal(g, acct)
+
+    const list = await (await get('/goals')).json() as any[]
+    const fresh = list.find((x: any) => x.name === g.name && x.id !== g.id)
+
+    expect(fresh).toBeTruthy()
+    expect(fresh.deadline).toBeNull()
+  })
+
+  it('is idempotent — a second GET does not regenerate the fresh cycle again', async () => {
+    const g = await mkGoal({ targetAmount: 1000, recurring: true, recurringDay: null })
+    const acct = await mkAccount()
+    await completeGoal(g, acct)
+
+    const firstList = await (await get('/goals')).json() as any[]
+    const fresh = firstList.find((x: any) => x.name === g.name && x.id !== g.id)
+    expect(fresh).toBeTruthy()
+
+    const secondList = await (await get('/goals')).json() as any[]
+
+    // Same fresh goal, same id, still at 0 — not regenerated, not duplicated.
+    const stillFresh = secondList.filter((x: any) => x.name === g.name)
+    expect(stillFresh).toHaveLength(1)
+    expect(stillFresh[0].id).toBe(fresh.id)
+    expect(stillFresh[0].currentAmount).toBe(0)
+    expect(stillFresh[0].archived).toBe(false)
+  })
+})

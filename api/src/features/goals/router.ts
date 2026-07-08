@@ -27,8 +27,54 @@ const contributionSchema = z.object({
   note: z.string().max(500).nullable().default(null),
 })
 
+// Recurring goals are regenerated lazily, on the next time the goal list
+// is read - no cron/scheduler for a self-hosted single-service app. A
+// completed recurring goal is archived and replaced by a fresh cycle
+// (same name/icon/color/target/recurrence, currentAmount reset to 0).
+//
+// recurringDay gates the earliest day of the month a new cycle may start
+// (e.g. to line up with a payday) - null means no such constraint, so the
+// new cycle starts as soon as the old one is complete.
+async function regenerateCompletedGoals(userId: string): Promise<void> {
+  const candidates = await db.select().from(goals)
+    .where(and(eq(goals.userId, userId), eq(goals.archived, false), eq(goals.recurring, true)))
+
+  const now = new Date()
+  const today = now.getDate()
+
+  for (const goal of candidates) {
+    if (goal.currentAmount < goal.targetAmount) continue
+    if (goal.recurringDay !== null && today < goal.recurringDay) continue
+
+    await db.update(goals).set({ archived: true }).where(eq(goals.id, goal.id))
+
+    let newDeadline: string | null = null
+    if (goal.deadline) {
+      const cycleDurationMs = new Date(goal.deadline).getTime() - goal.createdAt.getTime()
+      newDeadline = new Date(now.getTime() + cycleDurationMs).toISOString().slice(0, 10)
+    }
+
+    await db.insert(goals).values({
+      id: createId(),
+      userId,
+      name: goal.name,
+      icon: goal.icon,
+      color: goal.color,
+      targetAmount: goal.targetAmount,
+      currentAmount: 0,
+      deadline: newDeadline,
+      recurring: goal.recurring,
+      recurringDay: goal.recurringDay,
+      archived: false,
+      createdAt: now,
+    })
+  }
+}
+
 router.get('/', async (c) => {
   const user = c.get('user')
+  await regenerateCompletedGoals(user.id)
+
   const rows = await db.select().from(goals)
     .where(and(eq(goals.userId, user.id), eq(goals.archived, false)))
 
