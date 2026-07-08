@@ -81,7 +81,7 @@ importers:
         specifier: ^19.2.7
         version: 19.2.7(react@19.2.7)
       tailwindcss:
-        specifier: ^4.0.0
+        specifier: ^4.3.2
         version: 4.3.2
       zod:
         specifier: ^4.4.3
