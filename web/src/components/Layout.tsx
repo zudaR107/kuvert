@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import {
   LayoutDashboard, Receipt, Target, CreditCard, Wallet,
   LogOut, Sun, Moon, Monitor, Coffee, Menu, X, ChevronLeft
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { type Theme, THEMES, getStoredTheme, applyTheme } from '../lib/theme'
+import { buildSchluesselLoginUrl } from '../lib/authRedirect'
 
 const NAV_ITEMS = [
   { to: '/budget',       icon: <LayoutDashboard size={18} />, label: 'Бюджет' },
@@ -25,7 +26,6 @@ const THEME_ICONS: Record<Theme, React.ReactNode> = {
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth()
   const { pathname } = useLocation()
-  const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
   const [collapsed, setCollapsed] = useState(false)
@@ -145,7 +145,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
           {user && (
             <button
-              onClick={async () => { await logout(); navigate({ to: '/login' }) }}
+              onClick={async () => { await logout(); window.location.href = buildSchluesselLoginUrl(pathname) }}
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.625rem',
                 padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',

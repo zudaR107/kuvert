@@ -2,8 +2,9 @@ import { createRouter, createRootRoute, createRoute, Outlet, redirect } from '@t
 import { Layout } from '../components/Layout'
 import { BudgetPage } from '../features/budget/BudgetPage'
 import { GoalsPage } from '../features/goals/GoalsPage'
-import { LoginPage } from '../features/auth/LoginPage'
+import { AuthCallbackPage } from '../features/auth/AuthCallbackPage'
 import { getAccessToken } from '../lib/api'
+import { buildSchluesselLoginUrl } from '../lib/authRedirect'
 
 // Placeholder pages for sections not yet implemented
 function Placeholder({ title }: { title: string }) {
@@ -21,10 +22,10 @@ const rootRoute = createRootRoute({
   component: () => <Outlet />,
 })
 
-const loginRoute = createRoute({
+const authCallbackRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/login',
-  component: LoginPage,
+  path: '/auth/callback',
+  component: AuthCallbackPage,
 })
 
 const protectedLayout = createRoute({
@@ -32,7 +33,7 @@ const protectedLayout = createRoute({
   id: 'protected',
   beforeLoad: () => {
     if (!getAccessToken()) {
-      throw redirect({ to: '/login' })
+      window.location.href = buildSchluesselLoginUrl(window.location.pathname + window.location.search)
     }
   },
   component: () => <Layout><Outlet /></Layout>,
@@ -75,7 +76,7 @@ const accountsRoute = createRoute({
 })
 
 const routeTree = rootRoute.addChildren([
-  loginRoute,
+  authCallbackRoute,
   protectedLayout.addChildren([
     indexRoute,
     budgetRoute,
