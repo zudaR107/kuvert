@@ -3,6 +3,7 @@ import { Layout } from '../components/Layout'
 import { BudgetPage } from '../features/budget/BudgetPage'
 import { GoalsPage } from '../features/goals/GoalsPage'
 import { AccountsPage } from '../features/accounts/AccountsPage'
+import { DebtsPage } from '../features/debts/DebtsPage'
 import { AuthCallbackPage } from '../features/auth/AuthCallbackPage'
 import { getAccessToken } from '../lib/api'
 import { buildSchluesselLoginUrl } from '../lib/authRedirect'
@@ -67,7 +68,7 @@ const goalsRoute = createRoute({
 const debtsRoute = createRoute({
   getParentRoute: () => protectedLayout,
   path: '/debts',
-  component: () => <Placeholder title="Долги" />,
+  component: DebtsPage,
 })
 
 const accountsRoute = createRoute({
