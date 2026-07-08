@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
-  LayoutDashboard, Receipt, Target, CreditCard, Wallet,
+  LayoutDashboard, Receipt, Target, CreditCard, Wallet, Settings,
   LogOut, Sun, Moon, Monitor, Coffee, Menu, X, ChevronLeft
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: '/goals',        icon: <Target size={18} />,          label: 'Цели' },
   { to: '/debts',        icon: <CreditCard size={18} />,      label: 'Долги' },
   { to: '/accounts',     icon: <Wallet size={18} />,          label: 'Счета' },
+  { to: '/settings',     icon: <Settings size={18} />,        label: 'Настройки' },
 ]
 
 const THEME_ICONS: Record<Theme, React.ReactNode> = {

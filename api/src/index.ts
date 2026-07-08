@@ -12,6 +12,7 @@ import { envelopesRouter } from './features/envelopes/router.js'
 import { transactionsRouter } from './features/transactions/router.js'
 import { goalsRouter } from './features/goals/router.js'
 import { debtsRouter } from './features/debts/router.js'
+import { usersRouter } from './features/users/router.js'
 
 // Resolved relative to this file so it works both in dev (src/index.ts,
 // migrations at src/db/migrations) and in the compiled build
@@ -43,6 +44,7 @@ app.route('/envelopes', envelopesRouter)
 app.route('/transactions', transactionsRouter)
 app.route('/goals', goalsRouter)
 app.route('/debts', debtsRouter)
+app.route('/users', usersRouter)
 
 const PORT = Number(process.env['PORT'] ?? 3001)
 serve({ fetch: app.fetch, port: PORT }, () => {
