@@ -5,6 +5,13 @@ COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
 COPY web/package.json ./web/
 COPY api/package.json ./api/
 RUN pnpm install --frozen-lockfile --filter web
+
+# Vite bakes import.meta.env.VITE_* into the bundle at build time, so this
+# must be declared as an ARG to actually receive the value passed via
+# docker-compose's build.args.
+ARG VITE_SCHLUSSEL_URL=http://localhost:4001
+ENV VITE_SCHLUSSEL_URL=$VITE_SCHLUSSEL_URL
+
 COPY web ./web
 RUN cd web && pnpm run build
 

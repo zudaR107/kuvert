@@ -12,7 +12,11 @@ services:
       PORT: 3001
       DATABASE_PATH: /data/kuvert.db
       SCHLUSSEL_JWKS_URL: ${SCHLUSSEL_JWKS_URL:-http://schlussel:4000/.well-known/jwks.json}
-      JWT_ISSUER: ${JWT_ISSUER:-schloss}
+      # Must match schlussel's own JWT_ISSUER (hardcoded to "schlussel" in
+      # schlussel/docker-compose.yml) — this default previously said
+      # "schloss", which silently broke every cross-service token check
+      # unless JWT_ISSUER was overridden by hand.
+      JWT_ISSUER: ${JWT_ISSUER:-schlussel}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
     volumes:
       - kuvert-data:/data
@@ -28,6 +32,8 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
+      args:
+        VITE_SCHLUSSEL_URL: ${SCHLUSSEL_WEB_URL:-http://localhost:4001}
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-3002}:80"

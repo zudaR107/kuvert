@@ -11,15 +11,18 @@ export interface AuthUser {
 interface AuthState {
   user: AuthUser | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  // Set directly by AuthCallbackPage once it resolves /auth/me for the
+  // token it just received from schlussel — the on-mount silent-refresh
+  // effect below only runs once, so it can't pick this up on its own.
+  setUser: (user: AuthUser) => void
 }
 
 export const AuthContext = createContext<AuthState>({
   user: null,
   loading: true,
-  login: async () => {},
   logout: async () => {},
+  setUser: () => {},
 })
 
 export function useAuth() {
@@ -52,26 +55,11 @@ export function useAuthProvider(): AuthState {
       .finally(() => setLoading(false))
   }, [])
 
-  async function login(email: string, password: string) {
-    const res = await schluesselFetch('/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    })
-    if (!res.ok) throw new Error('Login failed')
-    const data = await res.json() as { accessToken: string }
-    setAccessToken(data.accessToken)
-    const me = await schluesselFetch('/me', {
-      headers: { Authorization: `Bearer ${data.accessToken}` },
-    })
-    setUser(await me.json() as AuthUser)
-  }
-
   async function logout() {
     await schluesselFetch('/logout', { method: 'POST' })
     setAccessToken(null)
     setUser(null)
   }
 
-  return { user, loading, login, logout }
+  return { user, loading, logout, setUser }
 }
