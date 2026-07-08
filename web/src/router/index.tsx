@@ -4,21 +4,10 @@ import { BudgetPage } from '../features/budget/BudgetPage'
 import { GoalsPage } from '../features/goals/GoalsPage'
 import { AccountsPage } from '../features/accounts/AccountsPage'
 import { DebtsPage } from '../features/debts/DebtsPage'
+import { TransactionsPage } from '../features/transactions/TransactionsPage'
 import { AuthCallbackPage } from '../features/auth/AuthCallbackPage'
 import { getAccessToken } from '../lib/api'
 import { buildSchluesselLoginUrl } from '../lib/authRedirect'
-
-// Placeholder pages for sections not yet implemented
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div style={{ maxWidth: 860, margin: '0 auto' }}>
-      <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1.5rem' }}>{title}</h1>
-      <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-        В разработке…
-      </div>
-    </div>
-  )
-}
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -56,7 +45,7 @@ const budgetRoute = createRoute({
 const transactionsRoute = createRoute({
   getParentRoute: () => protectedLayout,
   path: '/transactions',
-  component: () => <Placeholder title="Транзакции" />,
+  component: TransactionsPage,
 })
 
 const goalsRoute = createRoute({
