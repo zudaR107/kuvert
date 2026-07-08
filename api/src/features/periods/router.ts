@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, and, desc, lt } from 'drizzle-orm'
 import { createId } from '@paralleldrive/cuid2'
 import { db } from '../../db/index.js'
-import { periods, envelopes, envelopeBudgets, transactions } from '../../db/schema.js'
+import { periods, envelopes, envelopeBudgets, transactions, type Period } from '../../db/schema.js'
 import { requireAuth } from '../../middleware/auth.js'
 
 const router = new Hono()
@@ -15,6 +15,49 @@ const periodSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 })
+
+// Rollover is computed lazily, on read, rather than via an explicit
+// "close period" action or a scheduled job - there's no ops surface for
+// a cron in a self-hosted single-service app, and a period only really
+// needs its carried-over amount once someone actually looks at (or
+// allocates into) the next one.
+//
+// An envelope_budgets row, once it exists for a given (period, envelope)
+// pair, is trusted as-is - its carriedOver was either set by this same
+// function when the row was first created (see the PUT handler below) or
+// is a manual/legacy value that shouldn't be silently overwritten. Only
+// the *absence* of a row triggers computing what it should carry over.
+async function computeCarriedOver(userId: string, envelopeId: string, period: Period): Promise<number> {
+  const envelope = await db.select().from(envelopes).where(eq(envelopes.id, envelopeId)).get()
+  if (!envelope?.rolloverEnabled) return 0
+
+  const previousPeriod = await db.select().from(periods)
+    .where(and(eq(periods.userId, userId), lt(periods.endDate, period.startDate)))
+    .orderBy(desc(periods.endDate))
+    .get()
+  if (!previousPeriod) return 0
+
+  // Only roll over from a period that has actually ended - an
+  // in-progress previous period's leftover amount is still changing.
+  const today = new Date().toISOString().slice(0, 10)
+  if (previousPeriod.endDate >= today) return 0
+
+  const previousBudget = await db.select().from(envelopeBudgets)
+    .where(and(eq(envelopeBudgets.periodId, previousPeriod.id), eq(envelopeBudgets.envelopeId, envelopeId))).get()
+  const previousCarriedOver = previousBudget
+    ? previousBudget.carriedOver
+    : await computeCarriedOver(userId, envelopeId, previousPeriod)
+  const previousAllocated = previousBudget?.allocated ?? 0
+
+  const previousExpenses = await db.select().from(transactions)
+    .where(and(eq(transactions.userId, userId), eq(transactions.envelopeId, envelopeId), eq(transactions.type, 'expense')))
+  const previousSpent = previousExpenses
+    .filter((t) => t.date >= previousPeriod.startDate && t.date <= previousPeriod.endDate)
+    .reduce((sum, t) => sum + t.amount, 0)
+
+  const previousAvailable = previousAllocated + previousCarriedOver - previousSpent
+  return Math.max(0, previousAvailable)
+}
 
 router.get('/', async (c) => {
   const user = c.get('user')
@@ -71,13 +114,13 @@ router.get('/:id/budget', async (c) => {
 
   const budgetMap = new Map(budgets.map((b) => [b.envelopeId, b]))
 
-  const result = allEnvelopes.map((env) => {
+  const result = await Promise.all(allEnvelopes.map(async (env) => {
     const budget = budgetMap.get(env.id)
     const spent = txs
       .filter((t) => t.envelopeId === env.id && t.date >= period.startDate && t.date <= period.endDate)
       .reduce((sum, t) => sum + t.amount, 0)
     const allocated = budget?.allocated ?? 0
-    const carriedOver = budget?.carriedOver ?? 0
+    const carriedOver = budget ? budget.carriedOver : await computeCarriedOver(user.id, env.id, period)
     return {
       envelope: env,
       allocated,
@@ -85,7 +128,7 @@ router.get('/:id/budget', async (c) => {
       available: allocated + carriedOver - spent,
       spent,
     }
-  })
+  }))
 
   // To Be Budgeted = total income in period - total allocated
   const totalIncome = (await db.select().from(transactions)
@@ -122,7 +165,8 @@ router.put('/:id/budget/:envelopeId', zValidator('json', allocationSchema), asyn
     return c.json({ ...existing, allocated })
   }
 
-  const budget = { id: createId(), envelopeId, periodId, allocated, carriedOver: 0 }
+  const carriedOver = await computeCarriedOver(user.id, envelopeId, period)
+  const budget = { id: createId(), envelopeId, periodId, allocated, carriedOver }
   await db.insert(envelopeBudgets).values(budget)
   return c.json(budget, 201)
 })
