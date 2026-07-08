@@ -1,0 +1,26 @@
+:80 {
+	root * /srv
+	encode gzip zstd
+
+	@authCallback path /auth/callback*
+	handle @authCallback {
+		try_files {path} /index.html
+		file_server
+	}
+
+	# handle_path strips the matched /api prefix before proxying, same as
+	# nginx's proxy_pass http://kuvert-api:3001/ (trailing slash rewrite) -
+	# kuvert-api's own routes are mounted at root, not under /api.
+	handle_path /api/* {
+		reverse_proxy kuvert-api:3001
+	}
+
+	handle /auth/* {
+		reverse_proxy schlussel:4000
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}
