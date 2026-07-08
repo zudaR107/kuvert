@@ -15,7 +15,7 @@ ENV VITE_SCHLUSSEL_URL=$VITE_SCHLUSSEL_URL
 COPY web ./web
 RUN cd web && pnpm run build
 
-FROM nginx:alpine AS runner
-COPY --from=builder /app/web/dist /usr/share/nginx/html
-COPY web/nginx.conf /etc/nginx/conf.d/default.conf
+FROM caddy:2-alpine AS runner
+COPY --from=builder /app/web/dist /srv
+COPY web/Caddyfile /etc/caddy/Caddyfile
 EXPOSE 80
