@@ -5,6 +5,7 @@ import { GoalsPage } from '../features/goals/GoalsPage'
 import { AccountsPage } from '../features/accounts/AccountsPage'
 import { DebtsPage } from '../features/debts/DebtsPage'
 import { TransactionsPage } from '../features/transactions/TransactionsPage'
+import { SettingsPage } from '../features/settings/SettingsPage'
 import { AuthCallbackPage } from '../features/auth/AuthCallbackPage'
 import { getAccessToken } from '../lib/api'
 import { buildSchluesselLoginUrl } from '../lib/authRedirect'
@@ -66,6 +67,12 @@ const accountsRoute = createRoute({
   component: AccountsPage,
 })
 
+const settingsRoute = createRoute({
+  getParentRoute: () => protectedLayout,
+  path: '/settings',
+  component: SettingsPage,
+})
+
 const routeTree = rootRoute.addChildren([
   authCallbackRoute,
   protectedLayout.addChildren([
@@ -75,6 +82,7 @@ const routeTree = rootRoute.addChildren([
     goalsRoute,
     debtsRoute,
     accountsRoute,
+    settingsRoute,
   ]),
 ])
 

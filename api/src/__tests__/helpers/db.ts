@@ -49,4 +49,8 @@ export function cleanDb() {
     'periods',
   ]
   for (const t of tables) sqlite.exec(`DELETE FROM ${t}`)
+
+  // Reset mutable fields on the seeded users back to their defaults, since
+  // the users table itself is intentionally not wiped above.
+  sqlite.exec(`UPDATE users SET currency = 'RUB'`)
 }
