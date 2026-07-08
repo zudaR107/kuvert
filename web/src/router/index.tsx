@@ -2,6 +2,7 @@ import { createRouter, createRootRoute, createRoute, Outlet, redirect } from '@t
 import { Layout } from '../components/Layout'
 import { BudgetPage } from '../features/budget/BudgetPage'
 import { GoalsPage } from '../features/goals/GoalsPage'
+import { AccountsPage } from '../features/accounts/AccountsPage'
 import { AuthCallbackPage } from '../features/auth/AuthCallbackPage'
 import { getAccessToken } from '../lib/api'
 import { buildSchluesselLoginUrl } from '../lib/authRedirect'
@@ -72,7 +73,7 @@ const debtsRoute = createRoute({
 const accountsRoute = createRoute({
   getParentRoute: () => protectedLayout,
   path: '/accounts',
-  component: () => <Placeholder title="Счета" />,
+  component: AccountsPage,
 })
 
 const routeTree = rootRoute.addChildren([
