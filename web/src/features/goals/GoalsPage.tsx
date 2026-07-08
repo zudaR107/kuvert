@@ -1,7 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Target } from 'lucide-react'
 import { api } from '../../lib/api'
-import { formatAmount } from '../../lib/format'
+import { formatAmount, toMinorUnits, today } from '../../lib/format'
+import { Modal } from '../../components/Modal'
 
 interface Goal {
   id: string
@@ -15,10 +17,66 @@ interface Goal {
   monthlyNeeded: number | null
 }
 
+interface Account { id: string; name: string }
+
+interface GoalFormValues {
+  name: string
+  targetAmount: string
+  deadline: string
+  recurring: boolean
+  recurringDay: string
+}
+
+const DEFAULT_GOAL_FORM: GoalFormValues = {
+  name: '', targetAmount: '', deadline: '', recurring: false, recurringDay: '1',
+}
+
+interface ContributionFormValues {
+  accountId: string
+  amount: string
+  date: string
+  note: string
+}
+
+function defaultContributionForm(accounts: Account[]): ContributionFormValues {
+  return { accountId: accounts[0]?.id ?? '', amount: '', date: today(), note: '' }
+}
+
 export function GoalsPage() {
+  const qc = useQueryClient()
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [contributingGoal, setContributingGoal] = useState<Goal | null>(null)
+
   const { data: goals = [], isLoading } = useQuery<Goal[]>({
     queryKey: ['goals'],
     queryFn: () => api.get('/goals'),
+  })
+
+  const { data: accounts = [] } = useQuery<Account[]>({
+    queryKey: ['accounts'],
+    queryFn: () => api.get('/accounts'),
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (values: GoalFormValues) => api.post('/goals', {
+      name: values.name,
+      targetAmount: toMinorUnits(parseFloat(values.targetAmount) || 0),
+      deadline: values.deadline || null,
+      recurring: values.recurring,
+      recurringDay: values.recurring ? parseInt(values.recurringDay, 10) : null,
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['goals'] }); setCreateModalOpen(false) },
+  })
+
+  const contributeMutation = useMutation({
+    mutationFn: ({ goalId, values }: { goalId: string; values: ContributionFormValues }) =>
+      api.post(`/goals/${goalId}/contribute`, {
+        accountId: values.accountId,
+        amount: toMinorUnits(parseFloat(values.amount) || 0),
+        date: values.date,
+        note: values.note || null,
+      }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['goals'] }); setContributingGoal(null) },
   })
 
   return (
@@ -32,7 +90,7 @@ export function GoalsPage() {
             {goals.length} активных целей
           </p>
         </div>
-        <button className="btn-primary" style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }}>
+        <button className="btn-primary" style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }} onClick={() => setCreateModalOpen(true)}>
           <Plus size={15} /> Новая цель
         </button>
       </div>
@@ -40,17 +98,37 @@ export function GoalsPage() {
       {isLoading ? (
         <SkeletonGrid />
       ) : goals.length === 0 ? (
-        <EmptyState />
+        <EmptyState onCreate={() => setCreateModalOpen(true)} />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-          {goals.map((g) => <GoalCard key={g.id} goal={g} />)}
+          {goals.map((g) => (
+            <GoalCard key={g.id} goal={g} onContribute={() => setContributingGoal(g)} />
+          ))}
         </div>
       )}
+
+      <Modal open={createModalOpen} onClose={() => setCreateModalOpen(false)} title="Новая цель">
+        <GoalForm submitting={createMutation.isPending} onSubmit={(v) => createMutation.mutate(v)} />
+      </Modal>
+
+      <Modal
+        open={contributingGoal !== null}
+        onClose={() => setContributingGoal(null)}
+        title={contributingGoal ? `Пополнить «${contributingGoal.name}»` : 'Пополнить цель'}
+      >
+        {contributingGoal && (
+          <ContributionForm
+            accounts={accounts}
+            submitting={contributeMutation.isPending}
+            onSubmit={(values) => contributeMutation.mutate({ goalId: contributingGoal.id, values })}
+          />
+        )}
+      </Modal>
     </div>
   )
 }
 
-function GoalCard({ goal }: { goal: Goal }) {
+function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: () => void }) {
   const pct = Math.min(100, (goal.currentAmount / goal.targetAmount) * 100)
   const done = goal.currentAmount >= goal.targetAmount
 
@@ -119,17 +197,176 @@ function GoalCard({ goal }: { goal: Goal }) {
         </div>
       )}
 
-      <button
-        className="btn-primary"
-        style={{ width: '100%', marginTop: '0.75rem', justifyContent: 'center', fontSize: '0.8125rem', padding: '0.4rem' }}
-      >
-        <Plus size={14} /> Пополнить
-      </button>
+      {!done && (
+        <button
+          className="btn-primary"
+          style={{ width: '100%', marginTop: '0.75rem', justifyContent: 'center', fontSize: '0.8125rem', padding: '0.4rem' }}
+          onClick={onContribute}
+        >
+          <Plus size={14} /> Пополнить
+        </button>
+      )}
     </div>
   )
 }
 
-function EmptyState() {
+function GoalForm({ submitting, onSubmit }: {
+  submitting: boolean
+  onSubmit: (values: GoalFormValues) => void
+}) {
+  const [values, setValues] = useState<GoalFormValues>(DEFAULT_GOAL_FORM)
+
+  function set<K extends keyof GoalFormValues>(key: K, value: GoalFormValues[K]) {
+    setValues((v) => ({ ...v, [key]: value }))
+  }
+
+  return (
+    <form
+      onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
+      style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
+    >
+      <div>
+        <label className="label" htmlFor="goal-name">Название</label>
+        <input
+          id="goal-name"
+          className="input"
+          value={values.name}
+          onChange={(e) => set('name', e.target.value)}
+          placeholder="Отпуск, подушка безопасности…"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="label" htmlFor="goal-target">Целевая сумма</label>
+        <input
+          id="goal-target"
+          className="input"
+          type="number"
+          step="0.01"
+          min="0.01"
+          value={values.targetAmount}
+          onChange={(e) => set('targetAmount', e.target.value)}
+          required
+        />
+      </div>
+
+      <div>
+        <label className="label" htmlFor="goal-deadline">Срок (необязательно)</label>
+        <input
+          id="goal-deadline"
+          className="input"
+          type="date"
+          value={values.deadline}
+          onChange={(e) => set('deadline', e.target.value)}
+        />
+      </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+        <input
+          type="checkbox"
+          checked={values.recurring}
+          onChange={(e) => set('recurring', e.target.checked)}
+        />
+        Повторять цель после достижения
+      </label>
+
+      {values.recurring && (
+        <div>
+          <label className="label" htmlFor="goal-recurring-day">День месяца для нового цикла</label>
+          <input
+            id="goal-recurring-day"
+            className="input"
+            type="number"
+            min="1"
+            max="28"
+            value={values.recurringDay}
+            onChange={(e) => set('recurringDay', e.target.value)}
+          />
+        </div>
+      )}
+
+      <button type="submit" className="btn-primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
+        {submitting ? 'Сохранение…' : 'Сохранить'}
+      </button>
+    </form>
+  )
+}
+
+function ContributionForm({ accounts, submitting, onSubmit }: {
+  accounts: Account[]
+  submitting: boolean
+  onSubmit: (values: ContributionFormValues) => void
+}) {
+  const [values, setValues] = useState<ContributionFormValues>(() => defaultContributionForm(accounts))
+
+  function set<K extends keyof ContributionFormValues>(key: K, value: ContributionFormValues[K]) {
+    setValues((v) => ({ ...v, [key]: value }))
+  }
+
+  return (
+    <form
+      onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
+      style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
+    >
+      <div>
+        <label className="label" htmlFor="contribution-account">Счёт списания</label>
+        <select
+          id="contribution-account"
+          className="input"
+          value={values.accountId}
+          onChange={(e) => set('accountId', e.target.value)}
+          required
+        >
+          {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+      </div>
+
+      <div>
+        <label className="label" htmlFor="contribution-amount">Сумма</label>
+        <input
+          id="contribution-amount"
+          className="input"
+          type="number"
+          step="0.01"
+          min="0.01"
+          value={values.amount}
+          onChange={(e) => set('amount', e.target.value)}
+          required
+        />
+      </div>
+
+      <div>
+        <label className="label" htmlFor="contribution-date">Дата</label>
+        <input
+          id="contribution-date"
+          className="input"
+          type="date"
+          value={values.date}
+          onChange={(e) => set('date', e.target.value)}
+          required
+        />
+      </div>
+
+      <div>
+        <label className="label" htmlFor="contribution-note">Заметка</label>
+        <input
+          id="contribution-note"
+          className="input"
+          value={values.note}
+          onChange={(e) => set('note', e.target.value)}
+          placeholder="Необязательно"
+        />
+      </div>
+
+      <button type="submit" className="btn-primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
+        {submitting ? 'Сохранение…' : 'Пополнить'}
+      </button>
+    </form>
+  )
+}
+
+function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
       <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎯</div>
@@ -139,7 +376,7 @@ function EmptyState() {
       <p style={{ margin: '0 0 1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
         Определи, на что хочешь копить.
       </p>
-      <button className="btn-primary"><Plus size={16} /> Создать первую цель</button>
+      <button className="btn-primary" onClick={onCreate}><Plus size={16} /> Создать первую цель</button>
     </div>
   )
 }
