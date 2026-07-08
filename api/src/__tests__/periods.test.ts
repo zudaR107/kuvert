@@ -221,3 +221,220 @@ describe('PUT /periods/:id/budget/:envelopeId', () => {
     expect(res.status).toBe(404)
   })
 })
+
+// ── Rollover behavior ──────────────────────────────────────────────
+// Dates are deliberately fixed in the past (2024) for "already ended" periods
+// and far in the future (2027) for "not yet ended" periods, to avoid any
+// flakiness around the exact current date.
+describe('Rollover behavior', () => {
+  describe('GET /periods/:id/budget — computed carriedOver', () => {
+    it('is 0 for a period with no preceding period', async () => {
+      const period = await (await post('/periods', { name: 'Only', startDate: '2024-01-01', endDate: '2024-01-31' })).json() as any
+      const envelope = await (await post('/envelopes', { name: 'Groceries' })).json() as any
+
+      const body = await (await get(`/periods/${period.id}/budget`)).json() as any
+      const env = body.envelopes.find((e: any) => e.envelope.id === envelope.id)
+      expect(env.carriedOver).toBe(0)
+    })
+
+    it("rolls the previous (closed) period's leftover into carriedOver for a rollover-enabled envelope", async () => {
+      const account = await (await post('/accounts', { name: 'Cash' })).json() as any
+      const envelope = await (await post('/envelopes', { name: 'Groceries', rolloverEnabled: true })).json() as any
+
+      const period1 = await (await post('/periods', { name: 'Jan', startDate: '2024-01-01', endDate: '2024-01-31' })).json() as any
+      const period2 = await (await post('/periods', { name: 'Feb', startDate: '2024-02-01', endDate: '2024-02-29' })).json() as any
+
+      await put(`/periods/${period1.id}/budget/${envelope.id}`, { allocated: 10000 })
+      await post('/transactions', {
+        accountId: account.id, envelopeId: envelope.id, type: 'expense', amount: 3000, date: '2024-01-15',
+      })
+      // period1 leftover = 10000 + 0 - 3000 = 7000
+
+      const body = await (await get(`/periods/${period2.id}/budget`)).json() as any
+      const env = body.envelopes.find((e: any) => e.envelope.id === envelope.id)
+      expect(env.carriedOver).toBe(7000)
+      expect(env.available).toBe(7000) // carriedOver(7000) + allocated(0) - spent(0)
+    })
+
+    it('does not roll over for an envelope with rolloverEnabled: false, even with leftover in the prior period', async () => {
+      const account = await (await post('/accounts', { name: 'Cash' })).json() as any
+      const envelope = await (await post('/envelopes', { name: 'Fun', rolloverEnabled: false })).json() as any
+
+      const period1 = await (await post('/periods', { name: 'Jan', startDate: '2024-01-01', endDate: '2024-01-31' })).json() as any
+      const period2 = await (await post('/periods', { name: 'Feb', startDate: '2024-02-01', endDate: '2024-02-29' })).json() as any
+
+      await put(`/periods/${period1.id}/budget/${envelope.id}`, { allocated: 10000 })
+      await post('/transactions', {
+        accountId: account.id, envelopeId: envelope.id, type: 'expense', amount: 3000, date: '2024-01-15',
+      })
+      // period1 leftover = 7000, but rollover is disabled for this envelope
+
+      const body = await (await get(`/periods/${period2.id}/budget`)).json() as any
+      const env = body.envelopes.find((e: any) => e.envelope.id === envelope.id)
+      expect(env.carriedOver).toBe(0)
+    })
+
+    it('clamps a negative leftover (previous period overspent) to 0 instead of carrying a negative amount', async () => {
+      const account = await (await post('/accounts', { name: 'Cash' })).json() as any
+      const envelope = await (await post('/envelopes', { name: 'Groceries' })).json() as any
+
+      const period1 = await (await post('/periods', { name: 'Jan', startDate: '2024-01-01', endDate: '2024-01-31' })).json() as any
+      const period2 = await (await post('/periods', { name: 'Feb', startDate: '2024-02-01', endDate: '2024-02-29' })).json() as any
+
+      await put(`/periods/${period1.id}/budget/${envelope.id}`, { allocated: 5000 })
+      await post('/transactions', {
+        accountId: account.id, envelopeId: envelope.id, type: 'expense', amount: 8000, date: '2024-01-15',
+      })
+      // period1 available = 5000 - 8000 = -3000 → must clamp to 0 going into period2
+
+      const body = await (await get(`/periods/${period2.id}/budget`)).json() as any
+      const env = body.envelopes.find((e: any) => e.envelope.id === envelope.id)
+      expect(env.carriedOver).toBe(0)
+    })
+
+    it('does not roll over from a chronologically-previous period that has not ended yet', async () => {
+      const envelope = await (await post('/envelopes', { name: 'Groceries' })).json() as any
+
+      // This "previous" period hasn't ended yet (endDate far in the future).
+      const period1 = await (await post('/periods', { name: 'Future Jan', startDate: '2027-01-01', endDate: '2027-01-31' })).json() as any
+      const period2 = await (await post('/periods', { name: 'Future Feb', startDate: '2027-02-01', endDate: '2027-02-28' })).json() as any
+
+      await put(`/periods/${period1.id}/budget/${envelope.id}`, { allocated: 10000 })
+      // No spending, so period1's available would be 10000 if it counted — but it hasn't closed yet.
+
+      const body = await (await get(`/periods/${period2.id}/budget`)).json() as any
+      const env = body.envelopes.find((e: any) => e.envelope.id === envelope.id)
+      expect(env.carriedOver).toBe(0)
+    })
+
+    it("picks the period with the latest endDate strictly before the target period's startDate, not just any earlier period", async () => {
+      const envelope = await (await post('/envelopes', { name: 'Groceries' })).json() as any
+
+      const periodA = await (await post('/periods', { name: 'A', startDate: '2024-01-01', endDate: '2024-01-31' })).json() as any
+      const periodB = await (await post('/periods', { name: 'B', startDate: '2024-02-01', endDate: '2024-02-29' })).json() as any
+      // Gap in March — target starts in April, so both A and B precede it chronologically.
+      const target = await (await post('/periods', { name: 'Target', startDate: '2024-04-01', endDate: '2024-04-30' })).json() as any
+
+      // B is allocated first, deliberately, while A still has no envelope_budgets
+      // row of its own — so B's own carriedOver locks in at 0 here rather than
+      // compounding A's leftover into it (that compounding is covered by the
+      // dedicated chained-rollover tests below). This test is only about
+      // selection: does the target correctly pick B (not A) as its immediate
+      // predecessor.
+      await put(`/periods/${periodB.id}/budget/${envelope.id}`, { allocated: 2222 })
+      await put(`/periods/${periodA.id}/budget/${envelope.id}`, { allocated: 1111 })
+      // No spending in either — periodA leftover = 1111, periodB leftover = 2222.
+      // B has the later endDate of the two, so B is the "previous period" for target.
+
+      const body = await (await get(`/periods/${target.id}/budget`)).json() as any
+      const env = body.envelopes.find((e: any) => e.envelope.id === envelope.id)
+      expect(env.carriedOver).toBe(2222)
+    })
+
+    it('computes carryover independently per envelope', async () => {
+      const account = await (await post('/accounts', { name: 'Cash' })).json() as any
+      const rolloverEnv = await (await post('/envelopes', { name: 'Groceries', rolloverEnabled: true })).json() as any
+      const noRolloverEnv = await (await post('/envelopes', { name: 'Fun', rolloverEnabled: false })).json() as any
+
+      const period1 = await (await post('/periods', { name: 'Jan', startDate: '2024-01-01', endDate: '2024-01-31' })).json() as any
+      const period2 = await (await post('/periods', { name: 'Feb', startDate: '2024-02-01', endDate: '2024-02-29' })).json() as any
+
+      await put(`/periods/${period1.id}/budget/${rolloverEnv.id}`, { allocated: 10000 })
+      await put(`/periods/${period1.id}/budget/${noRolloverEnv.id}`, { allocated: 10000 })
+      await post('/transactions', {
+        accountId: account.id, envelopeId: rolloverEnv.id, type: 'expense', amount: 3000, date: '2024-01-15',
+      })
+      await post('/transactions', {
+        accountId: account.id, envelopeId: noRolloverEnv.id, type: 'expense', amount: 3000, date: '2024-01-15',
+      })
+      // Both envelopes have an identical 7000 leftover in period1.
+
+      const body = await (await get(`/periods/${period2.id}/budget`)).json() as any
+      const rEnv = body.envelopes.find((e: any) => e.envelope.id === rolloverEnv.id)
+      const nEnv = body.envelopes.find((e: any) => e.envelope.id === noRolloverEnv.id)
+      expect(rEnv.carriedOver).toBe(7000)
+      expect(nEnv.carriedOver).toBe(0)
+    })
+  })
+
+  describe('PUT /periods/:id/budget/:envelopeId — locking in carriedOver', () => {
+    it('persists the computed carriedOver on first allocation into a new period', async () => {
+      const account = await (await post('/accounts', { name: 'Cash' })).json() as any
+      const envelope = await (await post('/envelopes', { name: 'Groceries' })).json() as any
+
+      const period1 = await (await post('/periods', { name: 'Jan', startDate: '2024-01-01', endDate: '2024-01-31' })).json() as any
+      const period2 = await (await post('/periods', { name: 'Feb', startDate: '2024-02-01', endDate: '2024-02-29' })).json() as any
+
+      await put(`/periods/${period1.id}/budget/${envelope.id}`, { allocated: 10000 })
+      await post('/transactions', {
+        accountId: account.id, envelopeId: envelope.id, type: 'expense', amount: 3000, date: '2024-01-15',
+      })
+      // period1 leftover = 7000
+
+      const res = await put(`/periods/${period2.id}/budget/${envelope.id}`, { allocated: 1000 })
+      expect(res.status).toBe(201)
+      const body = await res.json() as any
+      expect(body.allocated).toBe(1000)
+      expect(body.carriedOver).toBe(7000)
+    })
+
+    it('keeps the locked-in carriedOver value even if the previous period changes afterwards', async () => {
+      const account = await (await post('/accounts', { name: 'Cash' })).json() as any
+      const envelope = await (await post('/envelopes', { name: 'Groceries' })).json() as any
+
+      const period1 = await (await post('/periods', { name: 'Jan', startDate: '2024-01-01', endDate: '2024-01-31' })).json() as any
+      const period2 = await (await post('/periods', { name: 'Feb', startDate: '2024-02-01', endDate: '2024-02-29' })).json() as any
+
+      await put(`/periods/${period1.id}/budget/${envelope.id}`, { allocated: 10000 })
+      await post('/transactions', {
+        accountId: account.id, envelopeId: envelope.id, type: 'expense', amount: 3000, date: '2024-01-15',
+      })
+      // period1 leftover = 7000 at the moment period2's row gets locked in.
+
+      await put(`/periods/${period2.id}/budget/${envelope.id}`, { allocated: 1000 })
+
+      // Retroactively change period1's leftover — this must NOT affect the already-locked row.
+      await post('/transactions', {
+        accountId: account.id, envelopeId: envelope.id, type: 'expense', amount: 2000, date: '2024-01-20',
+      })
+      // period1 leftover is now 5000, but period2's carriedOver was already persisted at 7000.
+
+      const body = await (await get(`/periods/${period2.id}/budget`)).json() as any
+      const env = body.envelopes.find((e: any) => e.envelope.id === envelope.id)
+      expect(env.carriedOver).toBe(7000)
+    })
+  })
+
+  describe('Chained rollover across multiple periods', () => {
+    it('compounds leftover across a 3-period chain when intermediate periods are never explicitly viewed or allocated into', async () => {
+      const account = await (await post('/accounts', { name: 'Cash' })).json() as any
+      const envelope = await (await post('/envelopes', { name: 'Groceries' })).json() as any
+
+      const period1 = await (await post('/periods', { name: 'Jan', startDate: '2024-01-01', endDate: '2024-01-31' })).json() as any
+      const period2 = await (await post('/periods', { name: 'Feb', startDate: '2024-02-01', endDate: '2024-02-29' })).json() as any
+      const period3 = await (await post('/periods', { name: 'Mar', startDate: '2024-03-01', endDate: '2024-03-31' })).json() as any
+
+      await put(`/periods/${period1.id}/budget/${envelope.id}`, { allocated: 10000 })
+      await post('/transactions', {
+        accountId: account.id, envelopeId: envelope.id, type: 'expense', amount: 4000, date: '2024-01-15',
+      })
+      // period1 leftover = 10000 - 4000 = 6000
+
+      // First hop: period2 (no explicit budget row) should compute carriedOver = 6000.
+      const period2Body = await (await get(`/periods/${period2.id}/budget`)).json() as any
+      const period2Env = period2Body.envelopes.find((e: any) => e.envelope.id === envelope.id)
+      expect(period2Env.carriedOver).toBe(6000)
+
+      // period2 accrues its own spending, but nobody ever allocates into it (no PUT — no persisted row).
+      await post('/transactions', {
+        accountId: account.id, envelopeId: envelope.id, type: 'expense', amount: 1000, date: '2024-02-10',
+      })
+      // period2's own leftover = carriedOver(6000) + allocated(0) - spent(1000) = 5000
+
+      // Second hop: period3 should reflect the compounded chain (6000 → 5000), not just period1's leftover.
+      const period3Body = await (await get(`/periods/${period3.id}/budget`)).json() as any
+      const period3Env = period3Body.envelopes.find((e: any) => e.envelope.id === envelope.id)
+      expect(period3Env.carriedOver).toBe(5000)
+    })
+  })
+})
