@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { api } from '../../lib/api'
-import { formatAmount, fromMinorUnits, toMinorUnits } from '../../lib/format'
+import { formatAmount, fromMinorUnits, toMinorUnits, today } from '../../lib/format'
+import { Modal } from '../../components/Modal'
 
 interface Period { id: string; name: string; startDate: string; endDate: string }
 interface Envelope { id: string; name: string; icon: string; color: string; rolloverEnabled: boolean }
@@ -19,9 +20,21 @@ interface BudgetData {
   toBeBudgeted: number
 }
 
+interface PeriodFormValues {
+  name: string
+  startDate: string
+  endDate: string
+}
+
+function defaultPeriodForm(): PeriodFormValues {
+  const d = today()
+  return { name: '', startDate: d, endDate: d }
+}
+
 export function BudgetPage() {
   const qc = useQueryClient()
   const [periodIndex, setPeriodIndex] = useState(0)
+  const [modalOpen, setModalOpen] = useState(false)
 
   const { data: periods = [] } = useQuery<Period[]>({
     queryKey: ['periods'],
@@ -42,8 +55,28 @@ export function BudgetPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['budget'] }),
   })
 
+  const createPeriodMutation = useMutation({
+    mutationFn: (values: PeriodFormValues) => api.post('/periods', values),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['periods'] })
+      setPeriodIndex(0)
+      setModalOpen(false)
+    },
+  })
+
+  const periodModal = (
+    <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Новый бюджетный период">
+      <PeriodForm submitting={createPeriodMutation.isPending} onSubmit={(v) => createPeriodMutation.mutate(v)} />
+    </Modal>
+  )
+
   if (!periods.length) {
-    return <EmptyState />
+    return (
+      <>
+        <EmptyState onCreate={() => setModalOpen(true)} />
+        {periodModal}
+      </>
+    )
   }
 
   const tbb = budget?.toBeBudgeted ?? 0
@@ -78,7 +111,11 @@ export function BudgetPage() {
             <ChevronRight size={18} />
           </button>
         </div>
-        <button className="btn-primary" style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }}>
+        <button
+          className="btn-primary"
+          style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }}
+          onClick={() => setModalOpen(true)}
+        >
           <Plus size={15} /> Новый бюджет
         </button>
       </div>
@@ -131,7 +168,67 @@ export function BudgetPage() {
           </table>
         </div>
       )}
+      {periodModal}
     </div>
+  )
+}
+
+function PeriodForm({ submitting, onSubmit }: {
+  submitting: boolean
+  onSubmit: (values: PeriodFormValues) => void
+}) {
+  const [values, setValues] = useState<PeriodFormValues>(defaultPeriodForm)
+
+  function set<K extends keyof PeriodFormValues>(key: K, value: PeriodFormValues[K]) {
+    setValues((v) => ({ ...v, [key]: value }))
+  }
+
+  return (
+    <form
+      onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
+      style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
+    >
+      <div>
+        <label className="label" htmlFor="period-name">Название</label>
+        <input
+          id="period-name"
+          className="input"
+          value={values.name}
+          onChange={(e) => set('name', e.target.value)}
+          placeholder="Июль 2026"
+          required
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ flex: 1 }}>
+          <label className="label" htmlFor="period-start">Начало</label>
+          <input
+            id="period-start"
+            className="input"
+            type="date"
+            value={values.startDate}
+            onChange={(e) => set('startDate', e.target.value)}
+            required
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label className="label" htmlFor="period-end">Конец</label>
+          <input
+            id="period-end"
+            className="input"
+            type="date"
+            value={values.endDate}
+            onChange={(e) => set('endDate', e.target.value)}
+            required
+          />
+        </div>
+      </div>
+
+      <button type="submit" className="btn-primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
+        {submitting ? 'Сохранение…' : 'Сохранить'}
+      </button>
+    </form>
   )
 }
 
@@ -222,7 +319,7 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
   )
 }
 
-function EmptyState() {
+function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
       <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📋</div>
@@ -232,7 +329,7 @@ function EmptyState() {
       <p style={{ margin: '0 0 1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
         Создай бюджетный период и первые конверты.
       </p>
-      <button className="btn-primary"><Plus size={16} /> Создать бюджет</button>
+      <button className="btn-primary" onClick={onCreate}><Plus size={16} /> Создать бюджет</button>
     </div>
   )
 }

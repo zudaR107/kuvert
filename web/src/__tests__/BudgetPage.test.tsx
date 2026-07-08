@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BudgetPage } from '../features/budget/BudgetPage'
 
@@ -242,5 +243,114 @@ describe('BudgetPage period navigation', () => {
     const buttons = screen.getAllByRole('button')
     // There should be at least 2 nav arrow buttons
     expect(buttons.length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Create-period modal (new behaviour)
+// ---------------------------------------------------------------------------
+describe('BudgetPage create-period modal', () => {
+  beforeEach(() => {
+    vi.mocked(api.post).mockReset()
+  })
+
+  it('opens a "Новый бюджетный период" modal when the header "Новый бюджет" button is clicked', async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') return Promise.resolve([mockPeriod])
+      return Promise.resolve(mockBudgetData)
+    })
+    const user = userEvent.setup()
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Июль 2024')
+
+    await user.click(screen.getByRole('button', { name: 'Новый бюджет' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Новый бюджетный период' })
+    expect(dialog).toBeInTheDocument()
+  })
+
+  it('opens the same modal via the empty-state "Создать бюджет" button', async () => {
+    vi.mocked(api.get).mockResolvedValue([])
+    const user = userEvent.setup()
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Бюджет не создан')
+
+    await user.click(screen.getByRole('button', { name: 'Создать бюджет' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Новый бюджетный период' })
+    expect(dialog).toBeInTheDocument()
+  })
+
+  it('the form has a required name textbox, required start/end date inputs, and a submit button', async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') return Promise.resolve([mockPeriod])
+      return Promise.resolve(mockBudgetData)
+    })
+    const user = userEvent.setup()
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Июль 2024')
+    await user.click(screen.getByRole('button', { name: 'Новый бюджет' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый бюджетный период' })
+
+    const nameInput = within(dialog).getByRole('textbox')
+    expect(nameInput).toBeRequired()
+
+    const dateInputs = dialog.querySelectorAll('input[type="date"]')
+    expect(dateInputs.length).toBe(2)
+    dateInputs.forEach((input) => expect(input).toBeRequired())
+
+    within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+  })
+
+  it('submitting with a name posts to /periods with the name and ISO (YYYY-MM-DD) date strings', async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') return Promise.resolve([mockPeriod])
+      return Promise.resolve(mockBudgetData)
+    })
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-period' })
+    const user = userEvent.setup()
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Июль 2024')
+    await user.click(screen.getByRole('button', { name: 'Новый бюджет' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый бюджетный период' })
+
+    const nameInput = within(dialog).getByRole('textbox')
+    await user.type(nameInput, 'Август 2024')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(api.post).toHaveBeenCalledTimes(1)
+    const [path, body] = vi.mocked(api.post).mock.calls[0]
+    expect(path).toBe('/periods')
+    const b = body as Record<string, unknown>
+    expect(b.name).toBe('Август 2024')
+    expect(typeof b.startDate).toBe('string')
+    expect(typeof b.endDate).toBe('string')
+    expect(b.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(b.endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('closes the modal on a successful POST', async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') return Promise.resolve([mockPeriod])
+      return Promise.resolve(mockBudgetData)
+    })
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-period' })
+    const user = userEvent.setup()
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Июль 2024')
+    await user.click(screen.getByRole('button', { name: 'Новый бюджет' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый бюджетный период' })
+
+    const nameInput = within(dialog).getByRole('textbox')
+    await user.type(nameInput, 'Август 2024')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    await vi.waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Новый бюджетный период' })).not.toBeInTheDocument()
+    })
   })
 })

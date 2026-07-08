@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { GoalsPage } from '../features/goals/GoalsPage'
 
@@ -54,6 +55,23 @@ const goalWithoutMonthly = {
   deadline: null,
   recurring: false,
   monthlyNeeded: null, // no deadline → no monthly suggestion
+}
+
+// Accounts fixture used by the goal-contribution modal (fetched via GET /accounts)
+const mockAccounts = [
+  { id: 'acc-1', name: 'Основной счёт', type: 'checking', currency: 'RUB' },
+  { id: 'acc-2', name: 'Наличные', type: 'cash', currency: 'RUB' },
+]
+
+// Routes GET /accounts to the accounts fixture and any other path (goals list)
+// to the provided goals array — mirrors the blanket-mock convention used
+// elsewhere in this file while still letting the contribute-modal tests see
+// a distinct accounts list.
+function mockApiForGoals(goals: unknown[]) {
+  vi.mocked(api.get).mockImplementation((path: string) => {
+    if (path === '/accounts') return Promise.resolve(mockAccounts)
+    return Promise.resolve(goals)
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -199,5 +217,278 @@ describe('GoalsPage progress bars', () => {
     await screen.findByText('Отпуск')
     const progressBars = container.querySelectorAll('.progress-bar')
     expect(progressBars.length).toBe(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Create-goal modal (new behaviour)
+// ---------------------------------------------------------------------------
+describe('GoalsPage create-goal modal', () => {
+  beforeEach(() => {
+    vi.mocked(api.post).mockReset()
+  })
+
+  it('opens a "Новая цель" modal when the header button is clicked', async () => {
+    mockApiForGoals([activeGoal])
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+
+    await user.click(screen.getByRole('button', { name: 'Новая цель' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
+    expect(dialog).toBeInTheDocument()
+  })
+
+  it('opens the same modal via the empty-state "Создать первую цель" button', async () => {
+    mockApiForGoals([])
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Целей пока нет')
+
+    await user.click(screen.getByRole('button', { name: 'Создать первую цель' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
+    expect(dialog).toBeInTheDocument()
+  })
+
+  it('the form has a required name textbox, a required target-amount input, an optional deadline date input, a recurring checkbox, and a submit button', async () => {
+    mockApiForGoals([activeGoal])
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+    await user.click(screen.getByRole('button', { name: 'Новая цель' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
+
+    const textboxes = within(dialog).getAllByRole('textbox')
+    const requiredTextbox = textboxes.find((t) => t.hasAttribute('required'))
+    expect(requiredTextbox).toBeDefined()
+
+    const spinbuttons = within(dialog).getAllByRole('spinbutton')
+    const requiredSpin = spinbuttons.find((s) => s.hasAttribute('required'))
+    expect(requiredSpin).toBeDefined()
+
+    const checkbox = within(dialog).getByRole('checkbox')
+    expect(checkbox).toBeInTheDocument()
+    expect(checkbox).not.toBeChecked()
+
+    const dateInput = dialog.querySelector('input[type="date"]')
+    expect(dateInput).not.toBeNull()
+    expect(dateInput).not.toBeRequired()
+
+    within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+  })
+
+  it('submitting with name and target amount (recurring unchecked) posts targetAmount in minor units, recurring: false, and recurringDay: null', async () => {
+    mockApiForGoals([activeGoal])
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-goal' })
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+    await user.click(screen.getByRole('button', { name: 'Новая цель' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
+
+    const textboxes = within(dialog).getAllByRole('textbox')
+    const nameInput = textboxes.find((t) => t.hasAttribute('required')) ?? textboxes[0]
+    await user.type(nameInput, 'Машина')
+
+    const spinbuttons = within(dialog).getAllByRole('spinbutton')
+    const amountInput = spinbuttons.find((s) => s.hasAttribute('required')) ?? spinbuttons[0]
+    await user.clear(amountInput)
+    await user.type(amountInput, '150.75')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(api.post).toHaveBeenCalledTimes(1)
+    const [path, body] = vi.mocked(api.post).mock.calls[0]
+    expect(path).toBe('/goals')
+    const b = body as Record<string, unknown>
+    expect(b.name).toBe('Машина')
+    expect(b.targetAmount).toBe(15075)
+    expect(Number.isInteger(b.targetAmount)).toBe(true)
+    expect(b.recurring).toBe(false)
+    expect(b.recurringDay).toBeNull()
+  })
+
+  it('checking the recurring checkbox and submitting posts recurring: true with a non-null integer recurringDay', async () => {
+    mockApiForGoals([activeGoal])
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-goal' })
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+    await user.click(screen.getByRole('button', { name: 'Новая цель' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
+
+    const textboxes = within(dialog).getAllByRole('textbox')
+    const nameInput = textboxes.find((t) => t.hasAttribute('required')) ?? textboxes[0]
+    await user.type(nameInput, 'Отпуск на море')
+
+    const spinbuttons = within(dialog).getAllByRole('spinbutton')
+    const amountInput = spinbuttons.find((s) => s.hasAttribute('required')) ?? spinbuttons[0]
+    await user.clear(amountInput)
+    await user.type(amountInput, '500')
+
+    const checkbox = within(dialog).getByRole('checkbox')
+    await user.click(checkbox)
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(api.post).toHaveBeenCalledTimes(1)
+    const [, body] = vi.mocked(api.post).mock.calls[0]
+    const b = body as Record<string, unknown>
+    expect(b.recurring).toBe(true)
+    expect(b.recurringDay).not.toBeNull()
+    expect(Number.isInteger(b.recurringDay)).toBe(true)
+  })
+
+  it('closes the create modal on a successful POST', async () => {
+    mockApiForGoals([activeGoal])
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-goal' })
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+    await user.click(screen.getByRole('button', { name: 'Новая цель' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
+
+    const textboxes = within(dialog).getAllByRole('textbox')
+    const nameInput = textboxes.find((t) => t.hasAttribute('required')) ?? textboxes[0]
+    await user.type(nameInput, 'Машина')
+
+    const spinbuttons = within(dialog).getAllByRole('spinbutton')
+    const amountInput = spinbuttons.find((s) => s.hasAttribute('required')) ?? spinbuttons[0]
+    await user.clear(amountInput)
+    await user.type(amountInput, '1000')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    await vi.waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Новая цель' })).not.toBeInTheDocument()
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Contribute-to-goal modal (new behaviour)
+// ---------------------------------------------------------------------------
+describe('GoalsPage contribute flow', () => {
+  beforeEach(() => {
+    vi.mocked(api.post).mockReset()
+  })
+
+  it('shows a "Пополнить" button for an incomplete goal', async () => {
+    mockApiForGoals([activeGoal])
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+    screen.getByRole('button', { name: 'Пополнить' })
+  })
+
+  it('does not show a "Пополнить" button for a completed goal', async () => {
+    mockApiForGoals([completedGoal])
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Ноутбук')
+    expect(screen.queryByRole('button', { name: 'Пополнить' })).not.toBeInTheDocument()
+  })
+
+  it('clicking "Пополнить" opens a modal whose title contains the goal\'s name', async () => {
+    mockApiForGoals([activeGoal])
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+
+    await user.click(screen.getByRole('button', { name: 'Пополнить' }))
+
+    const dialog = await screen.findByRole('dialog', { name: /Отпуск/ })
+    expect(dialog).toBeInTheDocument()
+  })
+
+  it('the contribution form has a required account select (populated from GET /accounts), a required amount input, a required date input, an optional note input, and a submit button', async () => {
+    mockApiForGoals([activeGoal])
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+    await user.click(screen.getByRole('button', { name: 'Пополнить' }))
+    const dialog = await screen.findByRole('dialog', { name: /Отпуск/ })
+
+    const select = within(dialog).getByRole('combobox') as HTMLSelectElement
+    expect(select).toBeRequired()
+    await vi.waitFor(() => {
+      expect(select.options.length).toBeGreaterThanOrEqual(mockAccounts.length)
+    })
+
+    const spinbuttons = within(dialog).getAllByRole('spinbutton')
+    const requiredSpin = spinbuttons.find((s) => s.hasAttribute('required'))
+    expect(requiredSpin).toBeDefined()
+
+    const dateInput = dialog.querySelector('input[type="date"]')
+    expect(dateInput).not.toBeNull()
+    expect(dateInput).toBeRequired()
+
+    within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить|Пополнить/ })
+  })
+
+  it('submitting the contribution form posts to /goals/{id}/contribute with amount in minor units, the selected accountId, and a date', async () => {
+    mockApiForGoals([activeGoal])
+    vi.mocked(api.post).mockResolvedValue({})
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+    await user.click(screen.getByRole('button', { name: 'Пополнить' }))
+    const dialog = await screen.findByRole('dialog', { name: /Отпуск/ })
+
+    const select = within(dialog).getByRole('combobox') as HTMLSelectElement
+    await vi.waitFor(() => expect(select.options.length).toBeGreaterThanOrEqual(mockAccounts.length))
+    await user.selectOptions(select, 'acc-2')
+
+    const spinbuttons = within(dialog).getAllByRole('spinbutton')
+    const amountInput = spinbuttons.find((s) => s.hasAttribute('required')) ?? spinbuttons[0]
+    await user.clear(amountInput)
+    await user.type(amountInput, '20.25')
+
+    const dateInput = dialog.querySelector('input[type="date"]') as HTMLInputElement
+    fireEvent.change(dateInput, { target: { value: '2024-08-15' } })
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить|Пополнить/ })
+    await user.click(submitButton)
+
+    expect(api.post).toHaveBeenCalledTimes(1)
+    const [path, body] = vi.mocked(api.post).mock.calls[0]
+    expect(path).toBe('/goals/goal-1/contribute')
+    const b = body as Record<string, unknown>
+    expect(b.amount).toBe(2025)
+    expect(Number.isInteger(b.amount)).toBe(true)
+    expect(b.accountId).toBe('acc-2')
+    expect(b.date).toBeTruthy()
+  })
+
+  it('closes the contribution modal on a successful POST', async () => {
+    mockApiForGoals([activeGoal])
+    vi.mocked(api.post).mockResolvedValue({})
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+    await user.click(screen.getByRole('button', { name: 'Пополнить' }))
+    const dialog = await screen.findByRole('dialog', { name: /Отпуск/ })
+
+    const select = within(dialog).getByRole('combobox') as HTMLSelectElement
+    await vi.waitFor(() => expect(select.options.length).toBeGreaterThanOrEqual(mockAccounts.length))
+    await user.selectOptions(select, 'acc-1')
+
+    const spinbuttons = within(dialog).getAllByRole('spinbutton')
+    const amountInput = spinbuttons.find((s) => s.hasAttribute('required')) ?? spinbuttons[0]
+    await user.clear(amountInput)
+    await user.type(amountInput, '10')
+
+    const dateInput = dialog.querySelector('input[type="date"]') as HTMLInputElement
+    fireEvent.change(dateInput, { target: { value: '2024-08-15' } })
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить|Пополнить/ })
+    await user.click(submitButton)
+
+    await vi.waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Отпуск/ })).not.toBeInTheDocument()
+    })
   })
 })
