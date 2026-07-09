@@ -25,6 +25,11 @@ fit best; add a new section if none fits.
 - Migrated from nginx to Caddy in the web image.
 - Docker images published to GHCR on merge to `main`.
 - Dependabot for both npm and GitHub Actions dependencies.
+- Dropped published host port - reached only through the Tor gateway now.
 
 ## Docs
 - README, AGPL-3.0 LICENSE, CONTRIBUTING.md.
+
+## Polish
+- Distinct favicon and a fixed browser tab title (was still the literal
+  Vite default "web").
