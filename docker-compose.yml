@@ -2,6 +2,12 @@
 #   docker network create schloss-net
 # schlussel runs from its own repo (see schlussel/docker-compose.yml) and
 # must be on the same network for kuvert-api to reach it by hostname.
+#
+# Neither service publishes a host port - both are reached through the
+# Tor gateway (see https://github.com/zudaR107/Tor), which is the only
+# container that binds to a host port. `kuvert-data` is given a fixed
+# name so it's the same physical volume whether this compose file is run
+# standalone or included from Tor's.
 services:
   kuvert-api:
     build:
@@ -17,7 +23,7 @@ services:
       # "schloss", which silently broke every cross-service token check
       # unless JWT_ISSUER was overridden by hand.
       JWT_ISSUER: ${JWT_ISSUER:-schlussel}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://kuvert.localhost}
     volumes:
       - kuvert-data:/data
     networks:
@@ -33,10 +39,8 @@ services:
       context: .
       dockerfile: web/Dockerfile
       args:
-        VITE_SCHLUSSEL_URL: ${SCHLUSSEL_WEB_URL:-http://localhost:4001}
+        VITE_SCHLUSSEL_URL: ${SCHLUSSEL_WEB_URL:-http://auth.localhost}
     restart: unless-stopped
-    ports:
-      - "${WEB_PORT:-3002}:80"
     networks:
       - schloss-net
     depends_on:
@@ -44,6 +48,7 @@ services:
 
 volumes:
   kuvert-data:
+    name: kuvert-data
 
 networks:
   schloss-net:
