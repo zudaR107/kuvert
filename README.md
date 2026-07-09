@@ -64,18 +64,17 @@ See `.env.example`. The important ones:
 | `JWT_ISSUER` | Must match Schlüssel's own issuer, or every token gets rejected |
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowlist (API) |
 | `VITE_SCHLUSSEL_URL` | Where "sign in" redirects to (baked in at web build time) |
-| `WEB_PORT` | Host port the web container listens on |
 
 ## Running with Docker
 
 ```sh
-docker network create schloss-net   # one-time, shared with the other two repos
+docker network create schloss-net   # one-time, shared with the other repos
 docker compose up -d
 ```
 
-Runs the API (internal only, reached by the web container's own proxy) and the web
-frontend on `${WEB_PORT:-3002}`, on the same `schloss-net` network as `schlussel` and
-`schloss`.
+Neither service publishes a host port — both are reached through the
+[Tor](https://github.com/zudaR107/Tor) gateway (`http://kuvert.localhost` in local dev),
+on the same `schloss-net` network as `schlussel` and `schloss`.
 
 ## License
 
