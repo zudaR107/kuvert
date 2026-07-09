@@ -23,9 +23,9 @@ const authCallbackRoute = createRoute({
 const protectedLayout = createRoute({
   getParentRoute: () => rootRoute,
   id: 'protected',
-  beforeLoad: () => {
+  beforeLoad: async () => {
     if (!getAccessToken()) {
-      window.location.href = buildSchluesselLoginUrl(window.location.pathname + window.location.search)
+      window.location.href = await buildSchluesselLoginUrl(window.location.pathname + window.location.search)
     }
   },
   component: () => <Layout><Outlet /></Layout>,

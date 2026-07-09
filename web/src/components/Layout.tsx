@@ -146,7 +146,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
           {user && (
             <button
-              onClick={async () => { await logout(); window.location.href = buildSchluesselLoginUrl(pathname) }}
+              onClick={async () => { await logout(); window.location.href = await buildSchluesselLoginUrl(pathname) }}
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.625rem',
                 padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',
