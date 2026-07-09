@@ -7,6 +7,10 @@ fit best; add a new section if none fits.
 ## Auth
 - Fixed logout not navigating away immediately.
 - Migrated from a local login page to the centralized schlussel auth flow.
+- Adopted Authorization Code + PKCE for the login handoff: generates and
+  stores a PKCE verifier before redirecting, and the callback page
+  exchanges the returned code for the real token via POST /auth/token
+  instead of reading it from the URL fragment.
 
 ## UI
 - Modal primitive; real Accounts, Debts, and Transactions pages (previously

@@ -2,39 +2,51 @@ import { useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { setAccessToken } from '../../lib/api'
 import { useAuth } from '../../hooks/useAuth'
+import { CODE_VERIFIER_STORAGE_KEY } from '../../lib/authRedirect'
 import type { AuthUser } from '../../hooks/useAuth'
 
-// Landed on after schlussel's hosted login redirects back with
-// `#token=...`. Pulls the token out of the fragment, strips it from the
-// URL/history immediately (it must not sit around visible or bookmarkable),
-// then hands off to the originally-requested page via a client-side
-// navigation — a full reload here would wipe the just-set access token,
-// which lives only in memory.
+// Landed on after schlussel's hosted login redirects back with `?code=...`
+// (a one-time authorization code, PKCE flow). Exchanges it - together with
+// the verifier stashed in sessionStorage before leaving - for the real
+// access token via POST /auth/token, strips the code from the URL/history
+// immediately (it must not sit around visible or bookmarkable), then hands
+// off to the originally-requested page via a client-side navigation — a
+// full reload here would wipe the just-set access token, which lives only
+// in memory.
 //
-// The token alone is enough for kuvert-api calls (sent as a bearer
-// header), but the shared AuthContext also needs a `user` object for the
-// UI — the on-mount silent-refresh effect in useAuth already ran once
-// before this redirect happened and won't run again, so this fetches
-// /auth/me itself and pushes the result in directly.
+// /auth/token returns both the token and the user in one response, so
+// there's no separate /auth/me round trip needed anymore (unlike the old
+// fragment-token flow, which only carried the token and had to fetch the
+// user object itself).
 export function AuthCallbackPage() {
   const navigate = useNavigate()
   const { setUser } = useAuth()
 
   useEffect(() => {
-    const hashParams = new URLSearchParams(window.location.hash.slice(1))
-    const token = hashParams.get('token')
-    const next = new URLSearchParams(window.location.search).get('next') ?? '/budget'
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    const next = params.get('next') ?? '/budget'
     history.replaceState(null, '', window.location.pathname)
 
-    if (!token) {
+    const codeVerifier = sessionStorage.getItem(CODE_VERIFIER_STORAGE_KEY)
+    sessionStorage.removeItem(CODE_VERIFIER_STORAGE_KEY)
+
+    if (!code || !codeVerifier) {
       navigate({ to: next, replace: true })
       return
     }
 
-    setAccessToken(token)
-    fetch('/auth/me', { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => (res.ok ? res.json() as Promise<AuthUser> : null))
-      .then((user) => { if (user) setUser(user) })
+    fetch('/auth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, codeVerifier }),
+    })
+      .then((res) => (res.ok ? res.json() as Promise<{ accessToken: string; user: AuthUser }> : null))
+      .then((data) => {
+        if (!data) return
+        setAccessToken(data.accessToken)
+        setUser(data.user)
+      })
       .catch(() => {})
       .finally(() => navigate({ to: next, replace: true }))
   }, [navigate, setUser])
