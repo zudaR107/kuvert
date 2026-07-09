@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Kuvert — envelope budgeting service for the Schloss platform",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev:api": "pnpm --filter api dev",
