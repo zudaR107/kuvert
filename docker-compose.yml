@@ -4,10 +4,10 @@
 # must be on the same network for kuvert-api to reach it by hostname.
 #
 # Neither service publishes a host port - both are reached through the
-# Tor gateway (see https://github.com/zudaR107/Tor), which is the only
+# Tor gateway (see https://github.com/zudaR107/tor), which is the only
 # container that binds to a host port. `kuvert-data` is given a fixed
 # name so it's the same physical volume whether this compose file is run
-# standalone or included from Tor's.
+# standalone or included from tor's.
 services:
   kuvert-api:
     build:

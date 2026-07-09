@@ -33,3 +33,5 @@ fit best; add a new section if none fits.
 ## Polish
 - Distinct favicon and a fixed browser tab title (was still the literal
   Vite default "web").
+- License/CI badges, a link to the Hof meta-repo, fixed Tor->tor URL casing
+  after the gateway repo's rename.

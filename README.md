@@ -1,5 +1,10 @@
 # Kuvert
 
+[![Test](https://github.com/zudaR107/kuvert/actions/workflows/test.yml/badge.svg)](https://github.com/zudaR107/kuvert/actions/workflows/test.yml)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+
+Part of the [Schloss platform](https://github.com/zudaR107/Hof).
+
 Kuvert ("envelope" in German) is an envelope-budgeting service — the first real service
 built on top of the Schloss platform. Money gets allocated into named envelopes for each
 budget period; spending against an envelope is tracked from your transactions, and
@@ -73,7 +78,7 @@ docker compose up -d
 ```
 
 Neither service publishes a host port — both are reached through the
-[Tor](https://github.com/zudaR107/Tor) gateway (`http://kuvert.localhost` in local dev),
+[Tor](https://github.com/zudaR107/tor) gateway (`http://kuvert.localhost` in local dev),
 on the same `schloss-net` network as `schlussel` and `schloss`.
 
 ## License
