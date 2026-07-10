@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../hooks/useAuth'
 import { type Theme, THEMES, getStoredTheme, applyTheme } from '../lib/theme'
 import { buildSchluesselLoginUrl } from '../lib/authRedirect'
+import { Footer } from './Footer'
 
 const SIDEBAR_COLLAPSED_WIDTH = 64
 const SIDEBAR_DEFAULT_WIDTH = 220
@@ -203,6 +204,38 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Bottom actions */}
         <div style={{ padding: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {user && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '0.625rem',
+              padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',
+              marginBottom: 4,
+            }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                background: 'var(--sidebar-accent)', color: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.75rem', fontWeight: 700,
+              }}>
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              {!collapsed && (
+                <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                  <div style={{
+                    color: 'var(--sidebar-text-active)', fontSize: '0.8125rem', fontWeight: 600,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>
+                    {user.name}
+                  </div>
+                  <div style={{
+                    color: 'var(--sidebar-text)', fontSize: '0.6875rem',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>
+                    {user.email}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={cycleTheme}
             style={{
@@ -315,6 +348,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <main style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
           {children}
         </main>
+
+        <Footer />
       </div>
     </div>
   )
