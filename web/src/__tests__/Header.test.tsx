@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, within, cleanup } from '@testing-library/react'
+import { render, within, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { AuthUser } from '../hooks/useAuth'
 
