@@ -78,8 +78,9 @@ docker compose up -d
 ```
 
 Neither service publishes a host port — both are reached through the
-[tor](https://github.com/zudaR107/tor) gateway (`http://kuvert.localhost` in local dev),
-on the same `schloss-net` network as `schlussel` and `schloss`.
+[tor](https://github.com/zudaR107/tor) gateway (`https://kuvert.localhost` in local dev
+- tor's Caddy auto-upgrades everything to HTTPS with its own locally-trusted CA), on the
+same `schloss-net` network as `schlussel` and `schloss`.
 
 ## License
 
