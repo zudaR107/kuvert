@@ -33,6 +33,8 @@ fit best; add a new section if none fits.
 
 ## Docs
 - README, AGPL-3.0 LICENSE, CONTRIBUTING.md.
+- Added CODE_OF_CONDUCT.md, SECURITY.md, issue templates, and a pull
+  request template.
 
 ## Polish
 - Distinct favicon and a fixed browser tab title (was still the literal
