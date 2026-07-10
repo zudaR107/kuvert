@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   LayoutDashboard, Receipt, Target, CreditCard, Wallet, Settings,
@@ -7,6 +7,23 @@ import {
 import { useAuth } from '../hooks/useAuth'
 import { type Theme, THEMES, getStoredTheme, applyTheme } from '../lib/theme'
 import { buildSchluesselLoginUrl } from '../lib/authRedirect'
+
+const SIDEBAR_COLLAPSED_WIDTH = 64
+const SIDEBAR_DEFAULT_WIDTH = 220
+const SIDEBAR_MIN_WIDTH = 180
+const SIDEBAR_MAX_WIDTH = 360
+// Dragging narrower than this snaps shut to the icon-only rail instead of
+// leaving an awkward in-between width.
+const SIDEBAR_COLLAPSE_THRESHOLD = 140
+const SIDEBAR_WIDTH_STORAGE_KEY = 'kuvert-sidebar-width'
+
+function getStoredSidebarWidth(): number {
+  const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY))
+  if (Number.isFinite(stored) && stored >= SIDEBAR_MIN_WIDTH && stored <= SIDEBAR_MAX_WIDTH) {
+    return stored
+  }
+  return SIDEBAR_DEFAULT_WIDTH
+}
 
 const NAV_ITEMS = [
   { to: '/budget',       icon: <LayoutDashboard size={18} />, label: 'Бюджет' },
@@ -30,6 +47,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
   const [collapsed, setCollapsed] = useState(false)
+  const [expandedWidth, setExpandedWidth] = useState(getStoredSidebarWidth)
+  const [dragging, setDragging] = useState(false)
+  const dragStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
   function cycleTheme() {
     const idx = THEMES.indexOf(theme)
@@ -38,7 +58,50 @@ export function Layout({ children }: { children: React.ReactNode }) {
     applyTheme(next)
   }
 
-  const sidebarWidth = collapsed ? 64 : 220
+  const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_WIDTH : expandedWidth
+
+  const handlePointerMove = useCallback((e: MouseEvent) => {
+    const start = dragStartRef.current
+    if (!start) return
+    const next = start.startWidth + (e.clientX - start.startX)
+    if (next < SIDEBAR_COLLAPSE_THRESHOLD) {
+      setCollapsed(true)
+    } else {
+      setCollapsed(false)
+      setExpandedWidth(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, next)))
+    }
+  }, [])
+
+  const handlePointerUp = useCallback(() => {
+    dragStartRef.current = null
+    setDragging(false)
+  }, [])
+
+  useEffect(() => {
+    if (!dragging) return
+    window.addEventListener('mousemove', handlePointerMove)
+    window.addEventListener('mouseup', handlePointerUp)
+    const previousCursor = document.body.style.cursor
+    const previousUserSelect = document.body.style.userSelect
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    return () => {
+      window.removeEventListener('mousemove', handlePointerMove)
+      window.removeEventListener('mouseup', handlePointerUp)
+      document.body.style.cursor = previousCursor
+      document.body.style.userSelect = previousUserSelect
+    }
+  }, [dragging, handlePointerMove, handlePointerUp])
+
+  useEffect(() => {
+    if (!collapsed) localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(expandedWidth))
+  }, [collapsed, expandedWidth])
+
+  function startDrag(e: React.MouseEvent) {
+    e.preventDefault()
+    dragStartRef.current = { startX: e.clientX, startWidth: sidebarWidth }
+    setDragging(true)
+  }
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
@@ -58,12 +121,23 @@ export function Layout({ children }: { children: React.ReactNode }) {
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 0,
-          transition: 'width 200ms ease',
+          transition: dragging ? 'none' : 'width 200ms ease',
           position: 'relative',
           zIndex: 50,
         }}
         className="hidden-mobile"
       >
+        {/* Resize handle - drag anywhere along the sidebar's right edge to
+            resize continuously; dragging past SIDEBAR_COLLAPSE_THRESHOLD
+            snaps shut. Wider than the border itself (10px) so it's easy to
+            grab, not just the old 24x24 toggle button below. */}
+        <div
+          onMouseDown={startDrag}
+          style={{
+            position: 'absolute', top: 0, bottom: 0, right: -5, width: 10,
+            cursor: 'col-resize', zIndex: 61,
+          }}
+        />
         {/* Logo */}
         <div style={{
           height: 56, display: 'flex', alignItems: 'center',
@@ -163,7 +237,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {/* Collapse toggle */}
+        {/* Collapse toggle - a quick full-collapse/expand click shortcut,
+            separate from (and rendered above) the drag-to-resize handle
+            above so it stays clickable where the two overlap. */}
         <button
           onClick={() => setCollapsed((c) => !c)}
           style={{
@@ -171,7 +247,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             width: 24, height: 24, borderRadius: '50%',
             background: 'var(--bg-surface)', border: '1px solid var(--border)',
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: 'var(--shadow-sm)', zIndex: 60,
+            boxShadow: 'var(--shadow-sm)', zIndex: 62,
             transition: 'transform 200ms',
             transform: collapsed ? 'rotate(180deg)' : 'none',
           }}

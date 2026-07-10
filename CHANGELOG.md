@@ -17,6 +17,10 @@ fit best; add a new section if none fits.
   "in development" placeholders).
 - Wired up the create/contribute buttons on the Budget and Goals pages.
 - Settings page (currency) backed by a new `/users/me` endpoint.
+- Sidebar is now resizable by dragging anywhere along its right edge
+  (previously only a tiny 24x24 toggle button, jumping between two fixed
+  widths) - drags below a threshold snap shut to the icon-only rail;
+  the expanded width is remembered in localStorage.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
