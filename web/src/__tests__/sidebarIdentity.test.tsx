@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, within } from '@testing-library/react'
 import { Layout } from '../components/Layout'
 import { AuthContext } from '../hooks/useAuth'
 import type { AuthUser } from '../hooks/useAuth'
@@ -32,8 +32,13 @@ function renderWithUser(user: AuthUser | null, loading = false) {
 
 describe('sidebar user identity block', () => {
   it('shows the user name and email when a user is present', () => {
-    renderWithUser(mockUser)
-    expect(screen.getByText('Jane Doe')).toBeInTheDocument()
+    const { container } = renderWithUser(mockUser)
+    // The Header (new, separate element) also shows the user's name now,
+    // so scope the name assertion to the sidebar's own identity block —
+    // same disambiguation convention as sidebarResize.test.tsx: the
+    // sidebar is the first <aside> (the mobile off-canvas one is second).
+    const sidebar = container.querySelectorAll('aside')[0] as HTMLElement
+    expect(within(sidebar).getByText('Jane Doe')).toBeInTheDocument()
     expect(screen.getByText('jane.doe@example.com')).toBeInTheDocument()
   })
 

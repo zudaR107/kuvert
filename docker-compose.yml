@@ -46,6 +46,7 @@ services:
       dockerfile: web/Dockerfile
       args:
         VITE_SCHLUSSEL_URL: ${SCHLUSSEL_WEB_URL:-https://auth.localhost}
+        VITE_SCHLOSS_URL: ${SCHLOSS_URL:-https://localhost}
     restart: unless-stopped
     networks:
       - schloss-net

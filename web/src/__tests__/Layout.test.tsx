@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Layout } from '../components/Layout'
 import { AuthContext } from '../hooks/useAuth'
@@ -44,9 +44,13 @@ describe('Layout logout', () => {
     const restore = stubLocation()
     const user = userEvent.setup()
     const mockLogout = vi.fn().mockResolvedValue(undefined)
-    renderLayout(mockLogout)
+    const { container } = renderLayout(mockLogout)
+    // The Header (new, separate element) also renders a logout button now,
+    // so scope this test to the sidebar's own button — same disambiguation
+    // convention as sidebarResize.test.tsx: the sidebar is the first <aside>.
+    const sidebar = container.querySelectorAll('aside')[0] as HTMLElement
 
-    await user.click(screen.getByRole('button', { name: /Выйти/ }))
+    await user.click(within(sidebar).getByRole('button', { name: /Выйти/ }))
 
     expect(mockLogout).toHaveBeenCalled()
     expect(window.location.href).toContain('/login')
@@ -62,8 +66,9 @@ describe('Layout logout', () => {
       calls.push('logout')
     })
 
-    renderLayout(mockLogout)
-    await user.click(screen.getByRole('button', { name: /Выйти/ }))
+    const { container } = renderLayout(mockLogout)
+    const sidebar = container.querySelectorAll('aside')[0] as HTMLElement
+    await user.click(within(sidebar).getByRole('button', { name: /Выйти/ }))
     if (window.location.href) calls.push('redirect')
 
     expect(calls).toEqual(['logout', 'redirect'])

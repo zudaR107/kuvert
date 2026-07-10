@@ -52,6 +52,12 @@ fit best; add a new section if none fits.
   itself on release - a synthetic click browsers fire right after a
   drag was bubbling to the click-to-toggle handler and immediately
   collapsing it.
+- Added a Header, always visible (desktop and mobile) at the top of the
+  main content area - previously the only header on mobile was bare
+  branding with no way back to schloss or to settings, and the sidebar
+  (which does carry identity/settings/logout) is hidden entirely below
+  the mobile breakpoint. Sits alongside the sidebar's own controls
+  rather than replacing them.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
