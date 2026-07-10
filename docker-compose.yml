@@ -23,7 +23,7 @@ services:
       # "schloss", which silently broke every cross-service token check
       # unless JWT_ISSUER was overridden by hand.
       JWT_ISSUER: ${JWT_ISSUER:-schlussel}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://kuvert.localhost}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://localhost,https://kuvert.localhost}
     volumes:
       - kuvert-data:/data
     networks:
@@ -39,7 +39,7 @@ services:
       context: .
       dockerfile: web/Dockerfile
       args:
-        VITE_SCHLUSSEL_URL: ${SCHLUSSEL_WEB_URL:-http://auth.localhost}
+        VITE_SCHLUSSEL_URL: ${SCHLUSSEL_WEB_URL:-https://auth.localhost}
     restart: unless-stopped
     networks:
       - schloss-net
