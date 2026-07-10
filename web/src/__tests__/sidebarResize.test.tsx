@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, fireEvent, cleanup, within } from '@testing-library/react'
+import { render, fireEvent, cleanup, within, act } from '@testing-library/react'
 import { Layout } from '../components/Layout'
 import { AuthContext } from '../hooks/useAuth'
 import type { AuthUser } from '../hooks/useAuth'
@@ -244,13 +244,25 @@ describe('sidebar click-to-toggle', () => {
     expect(widthPx(sidebar)).toBe(initialWidth)
   })
 
-  it('click-to-toggle still works correctly right after a drag-resize interaction', () => {
+  it('click-to-toggle still works correctly right after a drag-resize interaction', async () => {
     const { sidebar, handle } = renderLayout()
     drag(handle, 0, [40]) // resize a bit
     fireEvent.mouseUp(window)
     const widthAfterDrag = widthPx(sidebar)
     expect(widthAfterDrag).toBeGreaterThan(80)
 
+    // Browsers fire a synthetic "click" on mouseup right after a drag. This
+    // phantom click must be suppressed: the dragged width must be preserved,
+    // not collapsed.
+    fireEvent.click(sidebar)
+    expect(widthPx(sidebar)).toBe(widthAfterDrag)
+
+    // Wait out the suppression window (cleared via setTimeout(fn, 0)).
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+
+    // A genuine later click now toggles normally, like everywhere else.
     fireEvent.click(sidebar) // collapse
     expect(widthPx(sidebar)).toBeLessThanOrEqual(80)
 

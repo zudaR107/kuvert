@@ -51,6 +51,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [expandedWidth, setExpandedWidth] = useState(getStoredSidebarWidth)
   const [dragging, setDragging] = useState(false)
   const dragStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  // Browsers fire a synthetic "click" on mouseup right after a drag if the
+  // pointer ends up back over an element inside the sidebar (which it
+  // often does for a small drag) - without this, that phantom click
+  // bubbles to the sidebar's own click-to-toggle handler below and
+  // immediately collapses whatever width was just dragged to. Set to
+  // true for the rest of this tick whenever a real drag happened; the
+  // click-to-toggle handler checks and ignores it.
+  const suppressNextClickRef = useRef(false)
 
   function cycleTheme() {
     const idx = THEMES.indexOf(theme)
@@ -65,6 +73,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const start = dragStartRef.current
     if (!start) return
     const next = start.startWidth + (e.clientX - start.startX)
+    suppressNextClickRef.current = true
     if (next < SIDEBAR_COLLAPSE_THRESHOLD) {
       setCollapsed(true)
     } else {
@@ -76,6 +85,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const handlePointerUp = useCallback(() => {
     dragStartRef.current = null
     setDragging(false)
+    if (suppressNextClickRef.current) {
+      // Only suppress the synthetic click browsers fire immediately after
+      // this mouseup (same tick) - not some unrelated future click, in
+      // case the drag ended with the pointer outside the sidebar and no
+      // phantom click ever arrives to consume this flag itself.
+      setTimeout(() => { suppressNextClickRef.current = false }, 0)
+    }
   }, [])
 
   useEffect(() => {
@@ -120,7 +136,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
           Each interactive child below stops the click from bubbling here,
           so clicking an actual control never also toggles the sidebar. */}
       <aside
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => {
+          if (suppressNextClickRef.current) return
+          setCollapsed((c) => !c)
+        }}
         style={{
           width: sidebarWidth,
           background: 'var(--sidebar-bg)',
