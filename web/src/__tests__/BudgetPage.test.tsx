@@ -83,6 +83,18 @@ describe('BudgetPage empty state', () => {
     render(<BudgetPage />, { wrapper: createWrapper() })
     expect(screen.getByText('Бюджет не создан')).toBeInTheDocument()
   })
+
+  it('empty-state copy explains envelopes and cross-references "Счета" (Accounts)', async () => {
+    vi.mocked(api.get).mockResolvedValue([])
+    const { container } = render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Бюджет не создан')
+
+    const text = container.textContent ?? ''
+    // Mentions envelopes (конверт/конверты/конвертам)
+    expect(text).toMatch(/конверт/i)
+    // Explicitly cross-references the "Счета" (Accounts) page
+    expect(text).toMatch(/Счета/)
+  })
 })
 
 // ---------------------------------------------------------------------------

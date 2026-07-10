@@ -121,6 +121,23 @@ describe('AccountsPage empty state', () => {
     expect(buttons.length).toBeGreaterThanOrEqual(1)
   })
 
+  it('empty-state copy explains accounts as real money containers and cross-references "Бюджет" (Budget)', async () => {
+    mockApiWithAccounts([])
+    const { container } = render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByRole('button', { name: 'Новый счёт' })
+
+    // The empty-state block may commit a tick after the always-present header
+    // button, so poll rather than asserting immediately.
+    await vi.waitFor(() => {
+      const text = container.textContent ?? ''
+      // Explains accounts as a real place where money physically sits
+      expect(text).toMatch(/деньги/i)
+      expect(text).toMatch(/реальн|физическ/i)
+      // Explicitly cross-references the "Бюджет" (Budget) page
+      expect(text).toMatch(/Бюджет/)
+    })
+  })
+
   it('empty-state create trigger opens the "Новый счёт" modal', async () => {
     mockApiWithAccounts([])
     const user = userEvent.setup()
