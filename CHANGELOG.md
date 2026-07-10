@@ -33,6 +33,11 @@ fit best; add a new section if none fits.
 - Expanded the Budget and Accounts empty-state copy to explain the
   difference between the two (envelopes/spending categories vs. real
   money containers), with each page cross-referencing the other by name.
+- Every protected route now prefetches its page's data via a TanStack
+  Router loader before the route transition completes, instead of the
+  page component fetching only after mounting - removes the "renders
+  empty, then content pops in" flash on the first visit to each tab per
+  session.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
