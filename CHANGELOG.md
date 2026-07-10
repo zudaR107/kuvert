@@ -21,6 +21,10 @@ fit best; add a new section if none fits.
   (previously only a tiny 24x24 toggle button, jumping between two fixed
   widths) - drags below a threshold snap shut to the icon-only rail;
   the expanded width is remembered in localStorage.
+- Sidebar now shows the signed-in user's name and email above the
+  logout button (previously not shown anywhere); added a Footer
+  matching schloss's Header/Footer component structure, rendered below
+  the main content area on every page.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
