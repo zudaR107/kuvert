@@ -33,6 +33,11 @@ fit best; add a new section if none fits.
 - Fixed docker-compose.yml's default `ALLOWED_ORIGINS`/`VITE_SCHLUSSEL_URL`
   to `https://` - tor's gateway auto-upgrades everything to HTTPS, so the
   old `http://` defaults broke CORS and the login redirect target.
+- Renamed docker-compose.yml's outer `ALLOWED_ORIGINS` substitution
+  variable to `KUVERT_ALLOWED_ORIGINS` - it was silently colliding with
+  schlussel's own `ALLOWED_ORIGINS` default when tor's compose file
+  includes both under one shared `.env`. Container-internal env var name
+  is unchanged.
 
 ## Docs
 - README, AGPL-3.0 LICENSE, CONTRIBUTING.md.
