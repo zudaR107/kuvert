@@ -281,13 +281,16 @@ function AccountForm({ initial, submitting, onSubmit }: {
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+    <div style={{ textAlign: 'center', padding: '4rem 2rem', maxWidth: 440, margin: '0 auto' }}>
       <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏦</div>
       <h2 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
         Счетов пока нет
       </h2>
       <p style={{ margin: '0 0 1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-        Добавь свою первую карту, кошелёк или счёт.
+        Добавь карту, кошелёк или другой счёт — реальное место, где
+        физически лежат деньги. Это не то же самое, что бюджет: разбивку
+        расходов по категориям (конвертам) настраивай отдельно, на
+        странице «Бюджет».
       </p>
       <button className="btn-primary" onClick={onCreate}><Plus size={16} /> Добавить счёт</button>
     </div>

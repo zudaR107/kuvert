@@ -321,13 +321,16 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+    <div style={{ textAlign: 'center', padding: '4rem 2rem', maxWidth: 440, margin: '0 auto' }}>
       <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📋</div>
       <h2 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
         Бюджет не создан
       </h2>
       <p style={{ margin: '0 0 1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-        Создай бюджетный период и первые конверты.
+        Создай бюджетный период и раздели доходы по конвертам — категориям
+        расходов вроде «Продукты» или «Развлечения». Конверты не привязаны
+        к конкретному счёту: деньги на них можно тратить с любой карты или
+        наличными — сами счета настраиваются отдельно, на странице «Счета».
       </p>
       <button className="btn-primary" onClick={onCreate}><Plus size={16} /> Создать бюджет</button>
     </div>

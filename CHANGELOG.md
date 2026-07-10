@@ -25,6 +25,9 @@ fit best; add a new section if none fits.
   logout button (previously not shown anywhere); added a Footer
   matching schloss's Header/Footer component structure, rendered below
   the main content area on every page.
+- Expanded the Budget and Accounts empty-state copy to explain the
+  difference between the two (envelopes/spending categories vs. real
+  money containers), with each page cross-referencing the other by name.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
