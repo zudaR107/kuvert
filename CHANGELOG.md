@@ -11,6 +11,11 @@ fit best; add a new section if none fits.
   stores a PKCE verifier before redirecting, and the callback page
   exchanges the returned code for the real token via POST /auth/token
   instead of reading it from the URL fragment.
+- Restore the stored theme before first paint too (a synchronous inline
+  script in index.html's `<head>`, matching schloss and schlussel/web),
+  and render a themed blank div in AuthCallbackPage instead of nothing -
+  reduces the flash during the SSO silent-reauth redirect chain, which
+  can load and unload this app's pages within a fraction of a second.
 
 ## UI
 - Modal primitive; real Accounts, Debts, and Transactions pages (previously
