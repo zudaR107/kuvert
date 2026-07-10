@@ -38,6 +38,15 @@ fit best; add a new section if none fits.
   page component fetching only after mounting - removes the "renders
   empty, then content pops in" flash on the first visit to each tab per
   session.
+- Replaced the sidebar's small round toggle button with click-anywhere:
+  clicking any empty area of the sidebar (not a nav link, the theme
+  button, the logout button, or the user identity block) collapses or
+  expands it.
+- Fixed the Footer (added in a previous batch) being clipped and
+  unreachable on any page with enough content - `<main>` was missing
+  `min-height: 0`, a flexbox gotcha that let it grow past the viewport
+  instead of scrolling within its space, pushing the Footer past the
+  parent's `overflow: hidden`.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.

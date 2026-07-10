@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   LayoutDashboard, Receipt, Target, CreditCard, Wallet, Settings,
-  LogOut, Sun, Moon, Monitor, Coffee, Menu, X, ChevronLeft
+  LogOut, Sun, Moon, Monitor, Coffee, Menu, X
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { type Theme, THEMES, getStoredTheme, applyTheme } from '../lib/theme'
@@ -114,8 +114,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - clicking anywhere on it that isn't a nav link/button
+          (i.e. empty space: the logo area, gaps around the nav list, the
+          padding around the bottom actions) toggles collapsed/expanded.
+          Each interactive child below stops the click from bubbling here,
+          so clicking an actual control never also toggles the sidebar. */}
       <aside
+        onClick={() => setCollapsed((c) => !c)}
         style={{
           width: sidebarWidth,
           background: 'var(--sidebar-bg)',
@@ -125,6 +130,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           transition: dragging ? 'none' : 'width 200ms ease',
           position: 'relative',
           zIndex: 50,
+          cursor: 'pointer',
         }}
         className="hidden-mobile"
       >
@@ -164,14 +170,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: '0.75rem 0.5rem', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
+        {/* Nav - minHeight: 0 for the same reason as <main> below (a flex
+            item won't scroll within its space without it, growing the
+            sidebar past the viewport instead once there are enough
+            nav items). */}
+        <nav style={{ flex: 1, minHeight: 0, padding: '0.75rem 0.5rem', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
           {NAV_ITEMS.map(({ to, icon, label }) => {
             const active = pathname.startsWith(to)
             return (
               <Link
                 key={to}
                 to={to}
+                onClick={(e) => e.stopPropagation()}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -205,11 +215,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Bottom actions */}
         <div style={{ padding: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 2 }}>
           {user && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '0.625rem',
-              padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',
-              marginBottom: 4,
-            }}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.625rem',
+                padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',
+                marginBottom: 4,
+              }}
+            >
               <div style={{
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                 background: 'var(--sidebar-accent)', color: 'white',
@@ -237,7 +250,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
           )}
           <button
-            onClick={cycleTheme}
+            onClick={(e) => { e.stopPropagation(); cycleTheme() }}
             style={{
               display: 'flex', alignItems: 'center', gap: '0.625rem',
               padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',
@@ -253,7 +266,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
           {user && (
             <button
-              onClick={async () => { await logout(); window.location.href = await buildSchluesselLoginUrl(pathname) }}
+              onClick={async (e) => { e.stopPropagation(); await logout(); window.location.href = await buildSchluesselLoginUrl(pathname) }}
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.625rem',
                 padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',
@@ -269,24 +282,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </button>
           )}
         </div>
-
-        {/* Collapse toggle - a quick full-collapse/expand click shortcut,
-            separate from (and rendered above) the drag-to-resize handle
-            above so it stays clickable where the two overlap. */}
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          style={{
-            position: 'absolute', right: -12, top: 70,
-            width: 24, height: 24, borderRadius: '50%',
-            background: 'var(--bg-surface)', border: '1px solid var(--border)',
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: 'var(--shadow-sm)', zIndex: 62,
-            transition: 'transform 200ms',
-            transform: collapsed ? 'rotate(180deg)' : 'none',
-          }}
-        >
-          <ChevronLeft size={12} color="var(--text-muted)" />
-        </button>
       </aside>
 
       {/* Mobile sidebar */}
@@ -345,7 +340,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)' }}>Kuvert</span>
         </header>
 
-        <main style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
+        {/* minHeight: 0 is required here - a flex item defaults to
+            min-height: auto, which lets it grow to fit tall content
+            instead of scrolling within its allotted space. Without it,
+            long pages (a big transaction list, a full budget table) push
+            past the viewport and the Footer below gets clipped by the
+            parent's overflow: hidden - not just "needs scrolling",
+            genuinely unreachable. */}
+        <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '1.5rem' }}>
           {children}
         </main>
 

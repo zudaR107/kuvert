@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, fireEvent, cleanup } from '@testing-library/react'
+import { render, fireEvent, cleanup, within } from '@testing-library/react'
 import { Layout } from '../components/Layout'
 import { AuthContext } from '../hooks/useAuth'
 import type { AuthUser } from '../hooks/useAuth'
@@ -30,9 +30,7 @@ function renderLayout() {
   const sidebar = container.querySelectorAll('aside')[0] as HTMLElement
   // The resize handle is the element spanning the sidebar's full right edge.
   const handle = sidebar.querySelector('[style*="cursor: col-resize"]') as HTMLElement
-  // The small round collapse/expand toggle button.
-  const toggleBtn = sidebar.querySelector('button[style*="border-radius: 50%"]') as HTMLElement
-  return { sidebar, handle, toggleBtn }
+  return { sidebar, handle }
 }
 
 function widthPx(el: HTMLElement): number {
@@ -191,50 +189,72 @@ describe('sidebar resize handle', () => {
   })
 })
 
-describe('sidebar collapse/expand toggle button', () => {
-  it('remains clickable and toggles between collapsed and expanded state', () => {
-    const { sidebar, toggleBtn } = renderLayout()
-    expect(toggleBtn).toBeTruthy()
-    const initialWidth = widthPx(sidebar)
-    expect(initialWidth).toBeGreaterThan(80) // starts expanded
-
-    fireEvent.click(toggleBtn)
-    expect(widthPx(sidebar)).toBeLessThanOrEqual(80) // now collapsed
-
-    fireEvent.click(toggleBtn)
-    expect(widthPx(sidebar)).toBeGreaterThan(80) // expanded again
-  })
-
-  it('toggle click expands back to the last-remembered width, not always the default', () => {
+describe('sidebar click-to-toggle', () => {
+  it('clicking empty sidebar space toggles collapsed/expanded and expands back to the last-remembered width, not always the default', () => {
     localStorage.setItem(STORAGE_KEY, '300')
-    const { sidebar, toggleBtn } = renderLayout()
+    const { sidebar } = renderLayout()
     expect(widthPx(sidebar)).toBe(300)
 
-    fireEvent.click(toggleBtn) // collapse
+    fireEvent.click(sidebar) // click empty sidebar space -> collapse
     expect(widthPx(sidebar)).toBeLessThanOrEqual(80)
 
-    fireEvent.click(toggleBtn) // expand
+    fireEvent.click(sidebar) // click empty sidebar space again -> expand
     expect(widthPx(sidebar)).toBe(300)
   })
 
-  it('remains clickable and functions correctly even right after a drag-resize interaction (drag handle must not swallow its clicks)', () => {
-    const { sidebar, handle, toggleBtn } = renderLayout()
+  it('clicking a nav link does not toggle the sidebar', () => {
+    const { sidebar } = renderLayout()
+    const initialWidth = widthPx(sidebar)
+    const link = within(sidebar).getByText('Бюджет')
+
+    expect(() => fireEvent.click(link)).not.toThrow()
+    expect(widthPx(sidebar)).toBe(initialWidth)
+  })
+
+  it('clicking the theme-cycle button does not toggle the sidebar (and still cycles the theme)', () => {
+    const { sidebar } = renderLayout()
+    const initialWidth = widthPx(sidebar)
+    const themeBtn = within(sidebar).getByText(/^Тема:/).closest('button') as HTMLElement
+    const labelBefore = themeBtn.textContent
+
+    fireEvent.click(themeBtn)
+
+    expect(widthPx(sidebar)).toBe(initialWidth)
+    expect(themeBtn.textContent).not.toBe(labelBefore) // theme still cycled
+  })
+
+  it('clicking the logout button does not toggle the sidebar', () => {
+    const { sidebar } = renderLayout()
+    const initialWidth = widthPx(sidebar)
+    const logoutBtn = within(sidebar).getByText('Выйти').closest('button') as HTMLElement
+
+    fireEvent.click(logoutBtn)
+
+    expect(widthPx(sidebar)).toBe(initialWidth)
+  })
+
+  it('clicking the user identity block (name or email text) does not toggle the sidebar', () => {
+    const { sidebar } = renderLayout()
+    const initialWidth = widthPx(sidebar)
+
+    fireEvent.click(within(sidebar).getByText(mockUser.name))
+    expect(widthPx(sidebar)).toBe(initialWidth)
+
+    fireEvent.click(within(sidebar).getByText(mockUser.email))
+    expect(widthPx(sidebar)).toBe(initialWidth)
+  })
+
+  it('click-to-toggle still works correctly right after a drag-resize interaction', () => {
+    const { sidebar, handle } = renderLayout()
     drag(handle, 0, [40]) // resize a bit
     fireEvent.mouseUp(window)
     const widthAfterDrag = widthPx(sidebar)
     expect(widthAfterDrag).toBeGreaterThan(80)
 
-    fireEvent.click(toggleBtn)
+    fireEvent.click(sidebar) // collapse
     expect(widthPx(sidebar)).toBeLessThanOrEqual(80)
-  })
 
-  it('does not itself write to localStorage while collapsed via toggle (collapsed state is not persisted)', () => {
-    const { toggleBtn } = renderLayout()
-    // Establish an expanded baseline via drag so we have a known stored value.
-    localStorage.setItem(STORAGE_KEY, '250')
-    fireEvent.click(toggleBtn) // collapse
-    const stored = localStorage.getItem(STORAGE_KEY)
-    expect(Number(stored)).toBe(250)
-    expect(Number(stored)).not.toBe(64)
+    fireEvent.click(sidebar) // expand back to the width from the drag, not the default
+    expect(widthPx(sidebar)).toBe(widthAfterDrag)
   })
 })
