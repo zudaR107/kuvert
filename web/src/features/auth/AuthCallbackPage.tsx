@@ -51,5 +51,5 @@ export function AuthCallbackPage() {
       .finally(() => navigate({ to: next, replace: true }))
   }, [navigate, setUser])
 
-  return null
+  return <div style={{ minHeight: '100vh', background: 'var(--bg-base)' }} />
 }
