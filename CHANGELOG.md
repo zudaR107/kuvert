@@ -47,6 +47,11 @@ fit best; add a new section if none fits.
   `min-height: 0`, a flexbox gotcha that let it grow past the viewport
   instead of scrolling within its space, pushing the Footer past the
   parent's `overflow: hidden`.
+- Fixed the sidebar reverting a just-completed drag-resize back to its
+  previous width whenever the pointer ended up back over the sidebar
+  itself on release - a synthetic click browsers fire right after a
+  drag was bubbling to the click-to-toggle handler and immediately
+  collapsing it.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
