@@ -69,6 +69,7 @@ See `.env.example`. The important ones:
 | `JWT_ISSUER` | Must match Schlüssel's own issuer, or every token gets rejected |
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowlist (API) |
 | `VITE_SCHLUSSEL_URL` | Where "sign in" redirects to (baked in at web build time) |
+| `VITE_SCHLOSS_URL` | Where the header's "На главную" link points to (baked in at web build time) |
 
 ## Running with Docker
 

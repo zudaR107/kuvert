@@ -11,6 +11,8 @@ RUN pnpm install --frozen-lockfile --filter web
 # docker-compose's build.args.
 ARG VITE_SCHLUSSEL_URL=http://localhost:4001
 ENV VITE_SCHLUSSEL_URL=$VITE_SCHLUSSEL_URL
+ARG VITE_SCHLOSS_URL=http://localhost:3000
+ENV VITE_SCHLOSS_URL=$VITE_SCHLOSS_URL
 
 COPY web ./web
 RUN cd web && pnpm run build

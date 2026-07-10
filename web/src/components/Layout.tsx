@@ -2,12 +2,13 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   LayoutDashboard, Receipt, Target, CreditCard, Wallet, Settings,
-  LogOut, Sun, Moon, Monitor, Coffee, Menu, X
+  LogOut, Sun, Moon, Monitor, Coffee, X
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { type Theme, THEMES, getStoredTheme, applyTheme } from '../lib/theme'
 import { buildSchluesselLoginUrl } from '../lib/authRedirect'
 import { Footer } from './Footer'
+import { Header } from './Header'
 
 const SIDEBAR_COLLAPSED_WIDTH = 64
 const SIDEBAR_DEFAULT_WIDTH = 220
@@ -118,6 +119,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     e.preventDefault()
     dragStartRef.current = { startX: e.clientX, startWidth: sidebarWidth }
     setDragging(true)
+  }
+
+  async function handleLogout() {
+    await logout()
+    window.location.href = await buildSchluesselLoginUrl(pathname)
   }
 
   return (
@@ -285,7 +291,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
           {user && (
             <button
-              onClick={async (e) => { e.stopPropagation(); await logout(); window.location.href = await buildSchluesselLoginUrl(pathname) }}
+              onClick={async (e) => { e.stopPropagation(); await handleLogout() }}
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.625rem',
                 padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',
@@ -344,20 +350,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* Mobile header */}
-        <header
-          style={{
-            height: 52, background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', padding: '0 1rem', gap: '0.75rem',
-            boxShadow: 'var(--shadow-sm)',
-          }}
-          className="show-mobile"
-        >
-          <button onClick={() => setMobileOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 4 }}>
-            <Menu size={20} />
-          </button>
-          <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)' }}>Kuvert</span>
-        </header>
+        <Header user={user} onLogout={handleLogout} onOpenMobileMenu={() => setMobileOpen(true)} />
 
         {/* minHeight: 0 is required here - a flex item defaults to
             min-height: auto, which lets it grow to fit tall content
