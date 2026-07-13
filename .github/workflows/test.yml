@@ -11,9 +11,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Pinned exactly - "version: 11" lets the action self-update to
+      # whatever the latest 11.x is at run time, which broke CI when
+      # pnpm 11.12.0 shipped with an internal bug in the self-installer
+      # ("Cannot use 'in' operator to search for 'integrity' in
+      # undefined"), unrelated to any change in this repo.
       - uses: pnpm/action-setup@v6
         with:
-          version: 11
+          version: 11.7.0
 
       - uses: actions/setup-node@v6
         with:
@@ -29,9 +34,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Pinned exactly - "version: 11" lets the action self-update to
+      # whatever the latest 11.x is at run time, which broke CI when
+      # pnpm 11.12.0 shipped with an internal bug in the self-installer
+      # ("Cannot use 'in' operator to search for 'integrity' in
+      # undefined"), unrelated to any change in this repo.
       - uses: pnpm/action-setup@v6
         with:
-          version: 11
+          version: 11.7.0
 
       - uses: actions/setup-node@v6
         with:

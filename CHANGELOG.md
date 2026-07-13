@@ -82,6 +82,10 @@ fit best; add a new section if none fits.
   schlussel's own `ALLOWED_ORIGINS` default when tor's compose file
   includes both under one shared `.env`. Container-internal env var name
   is unchanged.
+- Pinned `pnpm/action-setup`'s version exactly in CI - letting it
+  self-update to the latest 11.x broke every workflow run once pnpm
+  11.12.0 shipped with a bug in its own self-installer, unrelated to
+  any change in this repo.
 
 ## Docs
 - README, AGPL-3.0 LICENSE, CONTRIBUTING.md.
