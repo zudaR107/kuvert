@@ -33,6 +33,9 @@ fit best; add a new section if none fits.
 - Expanded the Budget and Accounts empty-state copy to explain the
   difference between the two (envelopes/spending categories vs. real
   money containers), with each page cross-referencing the other by name.
+- Shortened that same copy back down to one sentence each, matching
+  every other tab's brief empty-state hint - kept the cross-reference,
+  dropped the extra explanation.
 - Every protected route now prefetches its page's data via a TanStack
   Router loader before the route transition completes, instead of the
   page component fetching only after mounting - removes the "renders
@@ -79,6 +82,10 @@ fit best; add a new section if none fits.
   schlussel's own `ALLOWED_ORIGINS` default when tor's compose file
   includes both under one shared `.env`. Container-internal env var name
   is unchanged.
+- Pinned `pnpm/action-setup`'s version exactly in CI - letting it
+  self-update to the latest 11.x broke every workflow run once pnpm
+  11.12.0 shipped with a bug in its own self-installer, unrelated to
+  any change in this repo.
 
 ## Docs
 - README, AGPL-3.0 LICENSE, CONTRIBUTING.md.
