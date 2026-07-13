@@ -33,6 +33,9 @@ fit best; add a new section if none fits.
 - Expanded the Budget and Accounts empty-state copy to explain the
   difference between the two (envelopes/spending categories vs. real
   money containers), with each page cross-referencing the other by name.
+- Shortened that same copy back down to one sentence each, matching
+  every other tab's brief empty-state hint - kept the cross-reference,
+  dropped the extra explanation.
 - Every protected route now prefetches its page's data via a TanStack
   Router loader before the route transition completes, instead of the
   page component fetching only after mounting - removes the "renders
