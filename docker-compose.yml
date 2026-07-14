@@ -13,6 +13,13 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
+      # This is a pnpm workspace (api/, web/) - even though this image
+      # never uses @zudar107/schloss-ui itself, pnpm's frozen-lockfile
+      # install fetches every package in the lockfile to verify it, so
+      # it still needs GitHub Packages auth. NODE_AUTH_TOKEN must be set
+      # in the shell/`.env` running `docker compose build`.
+      secrets:
+        - npm_token
     restart: unless-stopped
     environment:
       PORT: 3001
@@ -47,6 +54,10 @@ services:
       args:
         VITE_SCHLUSSEL_URL: ${SCHLUSSEL_WEB_URL:-https://auth.localhost}
         VITE_SCHLOSS_URL: ${SCHLOSS_URL:-https://localhost}
+      # @zudar107/schloss-ui is on GitHub Packages - even though it's
+      # public, installing it still requires auth.
+      secrets:
+        - npm_token
     restart: unless-stopped
     networks:
       - schloss-net
@@ -56,6 +67,10 @@ services:
 volumes:
   kuvert-data:
     name: kuvert-data
+
+secrets:
+  npm_token:
+    environment: NODE_AUTH_TOKEN
 
 networks:
   schloss-net:
