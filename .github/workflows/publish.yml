@@ -33,6 +33,8 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
+          secrets: |
+            npm_token=${{ secrets.GITHUB_TOKEN }}
           # ghcr.io requires lowercase; github.repository_owner preserves
           # the account's display case (zudaR107), so it's hardcoded here
           # rather than templated.

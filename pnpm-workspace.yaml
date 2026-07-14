@@ -5,3 +5,6 @@ packages:
 allowBuilds:
   better-sqlite3: true
   esbuild: true
+
+minimumReleaseAgeExclude:
+  - '@zudar107/schloss-ui@0.2.0'

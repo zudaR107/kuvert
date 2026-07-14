@@ -1,5 +1,6 @@
-import { Link } from '@tanstack/react-router'
-import { Home, Settings, LogOut, Menu } from 'lucide-react'
+import { Menu } from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
+import { Header as SharedHeader } from '@zudar107/schloss-ui'
 import type { AuthUser } from '../hooks/useAuth'
 
 // Where "На главную" links back to (schloss) - separate from
@@ -18,13 +19,21 @@ interface HeaderProps {
 // entirely below the mobile breakpoint. This sits alongside the sidebar's
 // own controls rather than replacing them.
 export function Header({ user, onLogout, onOpenMobileMenu }: HeaderProps) {
+  const navigate = useNavigate()
+
   return (
-    <header style={{
-      height: 56, background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 1.5rem', gap: '0.75rem', boxShadow: 'var(--shadow-sm)', flexShrink: 0,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+    <SharedHeader
+      logo={
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2}>
+          <rect x="2" y="5" width="20" height="15" rx="2" />
+          <path d="M2 10h20" />
+        </svg>
+      }
+      homeHref={SCHLOSS_URL}
+      user={user}
+      onSettings={() => { void navigate({ to: '/settings' }) }}
+      onLogout={onLogout}
+      leftSlot={
         <button
           onClick={onOpenMobileMenu}
           className="show-mobile"
@@ -33,36 +42,7 @@ export function Header({ user, onLogout, onOpenMobileMenu }: HeaderProps) {
         >
           <Menu size={20} />
         </button>
-        <a
-          href={SCHLOSS_URL}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', textDecoration: 'none', color: 'var(--text-secondary)', fontSize: '0.8125rem' }}
-        >
-          <Home size={16} />
-          <span className="hidden-mobile" style={{ display: 'flex' }}>На главную</span>
-        </a>
-      </div>
-
-      {user && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className="hidden-mobile" style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-            {user.name}
-          </span>
-          <Link
-            to="/settings"
-            aria-label="Настройки"
-            style={{ display: 'flex', color: 'var(--text-secondary)' }}
-          >
-            <Settings size={18} />
-          </Link>
-          <button
-            onClick={onLogout}
-            aria-label="Выйти"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--text-secondary)' }}
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
-      )}
-    </header>
+      }
+    />
   )
 }
