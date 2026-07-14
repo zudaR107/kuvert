@@ -4,7 +4,9 @@ import {
   LayoutDashboard, Receipt, Target, CreditCard, Wallet, Settings,
   LogOut, Sun, Moon, Monitor, Coffee, X
 } from 'lucide-react'
+import { Toast } from '@zudar107/schloss-ui'
 import { useAuth } from '../hooks/useAuth'
+import { useToast } from '../hooks/useToast'
 import { type Theme, THEMES, getStoredTheme, applyTheme } from '../lib/theme'
 import { buildSchluesselLoginUrl } from '../lib/authRedirect'
 import { Footer } from './Footer'
@@ -45,6 +47,7 @@ const THEME_ICONS: Record<Theme, React.ReactNode> = {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth()
+  const toast = useToast()
   const { pathname } = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
@@ -122,8 +125,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }
 
   async function handleLogout() {
-    await logout()
-    window.location.href = await buildSchluesselLoginUrl(pathname)
+    try {
+      await logout()
+      window.location.href = await buildSchluesselLoginUrl(pathname)
+    } catch (err) {
+      // Without this, a failed logout (or the PKCE redirect URL build
+      // that follows it) silently did nothing visible - the button
+      // looked broken rather than surfacing what went wrong.
+      console.error('Logout failed', err)
+      toast.showError('Не удалось выйти. Попробуйте ещё раз.')
+    }
   }
 
   return (
@@ -365,6 +376,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         <Footer />
       </div>
+
+      {toast.toast && (
+        <Toast open variant={toast.toast.variant} message={toast.toast.message} onDismiss={toast.dismiss} />
+      )}
     </div>
   )
 }

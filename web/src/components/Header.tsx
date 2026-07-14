@@ -23,13 +23,18 @@ export function Header({ user, onLogout, onOpenMobileMenu }: HeaderProps) {
 
   return (
     <SharedHeader
+      // The home link leads to schloss (kuvert has no home page of its
+      // own), so the badge shows schloss's own logo mark, not kuvert's -
+      // it should look like it goes to a different app, not display
+      // kuvert's identity in a slot meant for "where this link goes".
       logo={
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2}>
-          <rect x="2" y="5" width="20" height="15" rx="2" />
-          <path d="M2 10h20" />
+          <rect x="3" y="11" width="18" height="11" rx="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
       }
       homeHref={SCHLOSS_URL}
+      homeTitle="На главную"
       user={user}
       onSettings={() => { void navigate({ to: '/settings' }) }}
       onLogout={onLogout}
