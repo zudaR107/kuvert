@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Button } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 
 interface UserProfile {
@@ -75,14 +76,14 @@ export function SettingsPage() {
               </select>
             </div>
 
-            <button
+            <Button
               type="submit"
-              className="btn-primary"
+              variant="primary"
               disabled={updateMutation.isPending}
               style={{ justifyContent: 'center', padding: '0.625rem' }}
             >
               {updateMutation.isPending ? 'Сохранение…' : saved ? 'Сохранено ✓' : 'Сохранить'}
-            </button>
+            </Button>
           </form>
         )}
       </div>

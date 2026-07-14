@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Target } from 'lucide-react'
-import { EmptyState, ICON_SIZE } from '@zudar107/schloss-ui'
+import { EmptyState, ICON_SIZE, Button, Badge, StatTile } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, toMinorUnits, today } from '../../lib/format'
 import { Modal } from '../../components/Modal'
@@ -91,10 +91,20 @@ export function GoalsPage() {
             {goals.length} активных целей
           </p>
         </div>
-        <button className="btn-primary" style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }} onClick={() => setCreateModalOpen(true)}>
+        <Button variant="primary" style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }} onClick={() => setCreateModalOpen(true)}>
           <Plus size={15} /> Новая цель
-        </button>
+        </Button>
       </div>
+
+      {!isLoading && goals.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <StatTile label="Накоплено" value={formatAmount(goals.reduce((sum, g) => sum + g.currentAmount, 0))} accent />
+          <StatTile
+            label="Осталось накопить"
+            value={formatAmount(goals.reduce((sum, g) => sum + Math.max(0, g.targetAmount - g.currentAmount), 0))}
+          />
+        </div>
+      )}
 
       {isLoading ? (
         <SkeletonGrid />
@@ -161,15 +171,7 @@ function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: () => void
             )}
           </div>
         </div>
-        {done && (
-          <span style={{
-            fontSize: '0.65rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: 99,
-            background: 'var(--success-muted)', color: 'var(--success)',
-            textTransform: 'uppercase', letterSpacing: '0.06em',
-          }}>
-            Достигнуто ✓
-          </span>
-        )}
+        {done && <Badge variant="success">Достигнуто ✓</Badge>}
       </div>
 
       {/* Progress */}
@@ -206,13 +208,13 @@ function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: () => void
       )}
 
       {!done && (
-        <button
-          className="btn-primary"
+        <Button
+          variant="primary"
           style={{ width: '100%', marginTop: '0.75rem', justifyContent: 'center', fontSize: '0.8125rem', padding: '0.4rem' }}
           onClick={onContribute}
         >
           <Plus size={14} /> Пополнить
-        </button>
+        </Button>
       )}
     </div>
   )
@@ -294,9 +296,9 @@ function GoalForm({ submitting, onSubmit }: {
         </div>
       )}
 
-      <button type="submit" className="btn-primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
+      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
         {submitting ? 'Сохранение…' : 'Сохранить'}
-      </button>
+      </Button>
     </form>
   )
 }
@@ -367,9 +369,9 @@ function ContributionForm({ accounts, submitting, onSubmit }: {
         />
       </div>
 
-      <button type="submit" className="btn-primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
+      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
         {submitting ? 'Сохранение…' : 'Пополнить'}
-      </button>
+      </Button>
     </form>
   )
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, CreditCard, Receipt, Trash2 } from 'lucide-react'
-import { EmptyState as SharedEmptyState, ICON_SIZE } from '@zudar107/schloss-ui'
+import { Plus, CreditCard, Receipt, Trash2 } from 'lucide-react'
+import { EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, Amount, StatTile } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits, today } from '../../lib/format'
 import { Modal } from '../../components/Modal'
@@ -125,14 +125,14 @@ export function TransactionsPage() {
             {transactions.length} {transactions.length === 1 ? 'запись' : 'записей'}
           </p>
         </div>
-        <button
-          className="btn-primary"
+        <Button
+          variant="primary"
           style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }}
           onClick={openCreate}
           disabled={accounts.length === 0}
         >
           <Plus size={15} /> Новая транзакция
-        </button>
+        </Button>
       </div>
 
       <TransactionFilters
@@ -141,6 +141,19 @@ export function TransactionsPage() {
         envelopes={envelopes}
         onChange={setFilters}
       />
+
+      {!isLoading && transactions.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <StatTile
+            label="Доходы"
+            value={formatAmount(transactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0))}
+          />
+          <StatTile
+            label="Расходы"
+            value={formatAmount(transactions.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0))}
+          />
+        </div>
+      )}
 
       {isLoading ? (
         <SkeletonList />
@@ -204,10 +217,16 @@ function toPayload(values: TxFormValues) {
   }
 }
 
-const TYPE_ICONS: Record<TxType, React.ReactNode> = {
-  income: <ArrowDownCircle size={18} />,
-  expense: <ArrowUpCircle size={18} />,
-  transfer: <ArrowLeftRight size={18} />,
+const TYPE_LABELS: Record<TxType, string> = {
+  income: 'Доход',
+  expense: 'Расход',
+  transfer: 'Перевод',
+}
+
+const TYPE_BADGE_VARIANTS: Record<TxType, 'success' | 'danger' | 'info'> = {
+  income: 'success',
+  expense: 'danger',
+  transfer: 'info',
 }
 
 const TYPE_COLORS: Record<TxType, string> = {
@@ -255,10 +274,10 @@ function TransactionRow({ tx, account, envelope, onEdit, onDelete }: {
   onEdit: () => void
   onDelete: () => void
 }) {
-  const sign = tx.type === 'income' ? '+' : tx.type === 'expense' ? '−' : ''
+  const amountText = formatAmount(tx.amount, account?.currency)
   return (
     <div style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
-      <div style={{ color: TYPE_COLORS[tx.type], flexShrink: 0 }}>{TYPE_ICONS[tx.type]}</div>
+      <Badge variant={TYPE_BADGE_VARIANTS[tx.type]} dot>{TYPE_LABELS[tx.type]}</Badge>
 
       <button
         onClick={onEdit}
@@ -274,13 +293,17 @@ function TransactionRow({ tx, account, envelope, onEdit, onDelete }: {
         </div>
       </button>
 
-      <div style={{ fontWeight: 600, fontSize: '0.9375rem', color: TYPE_COLORS[tx.type] }}>
-        {sign}{formatAmount(tx.amount, account?.currency)}
+      <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>
+        {tx.type === 'transfer' ? (
+          <span style={{ color: TYPE_COLORS.transfer }}>{amountText}</span>
+        ) : (
+          <Amount value={tx.type === 'income' ? tx.amount : -tx.amount}>{amountText}</Amount>
+        )}
       </div>
 
-      <button className="btn-ghost" style={{ padding: '0.4rem' }} onClick={onDelete} aria-label="Удалить транзакцию">
+      <Button variant="ghost" style={{ padding: '0.4rem', border: 'none' }} onClick={onDelete} aria-label="Удалить транзакцию">
         <Trash2 size={16} />
-      </button>
+      </Button>
     </div>
   )
 }
@@ -375,9 +398,9 @@ function TransactionForm({ accounts, envelopes, initial, submitting, onSubmit }:
         />
       </div>
 
-      <button type="submit" className="btn-primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
+      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
         {submitting ? 'Сохранение…' : 'Сохранить'}
-      </button>
+      </Button>
     </form>
   )
 }

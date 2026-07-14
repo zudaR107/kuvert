@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowDownLeft, ArrowUpRight, Check, Handshake, Trash2 } from 'lucide-react'
-import { EmptyState as SharedEmptyState, ICON_SIZE } from '@zudar107/schloss-ui'
+import { EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, SegmentedControl, Amount, StatTile } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits } from '../../lib/format'
 import { Modal } from '../../components/Modal'
@@ -95,27 +95,34 @@ export function DebtsPage() {
             {debts.length} {settledFilter ? 'закрытых' : 'активных'}
           </p>
         </div>
-        <button className="btn-primary" style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }} onClick={openCreate}>
+        <Button variant="primary" style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }} onClick={openCreate}>
           <Plus size={15} /> Новый долг
-        </button>
+        </Button>
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-        <button
-          className={settledFilter ? 'btn-ghost' : 'btn-primary'}
-          style={{ fontSize: '0.8125rem', padding: '0.375rem 0.75rem' }}
-          onClick={() => setSettledFilter(false)}
-        >
-          Активные
-        </button>
-        <button
-          className={settledFilter ? 'btn-primary' : 'btn-ghost'}
-          style={{ fontSize: '0.8125rem', padding: '0.375rem 0.75rem' }}
-          onClick={() => setSettledFilter(true)}
-        >
-          Закрытые
-        </button>
+      <div style={{ marginBottom: '1rem' }}>
+        <SegmentedControl
+          options={[
+            { value: 'active', label: 'Активные' },
+            { value: 'settled', label: 'Закрытые' },
+          ]}
+          value={settledFilter ? 'settled' : 'active'}
+          onChange={(v) => setSettledFilter(v === 'settled')}
+        />
       </div>
+
+      {!isLoading && debts.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <StatTile
+            label="Мне должны"
+            value={formatAmount(debts.filter((d) => d.type === 'owed').reduce((sum, d) => sum + d.amount, 0))}
+          />
+          <StatTile
+            label="Я должен"
+            value={formatAmount(debts.filter((d) => d.type === 'owing').reduce((sum, d) => sum + d.amount, 0))}
+          />
+        </div>
+      )}
 
       {isLoading ? (
         <SkeletonList />
@@ -191,25 +198,28 @@ function DebtRow({ debt, onEdit, onSettle, onDelete }: {
         onClick={onEdit}
         style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
       >
-        <div style={{ fontWeight: 500, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{debt.counterparty}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontWeight: 500, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{debt.counterparty}</span>
+          {debt.settled && <Badge variant="neutral">Закрыт</Badge>}
+        </div>
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
           {owed ? 'Должны мне' : 'Я должен'}
           {debt.dueDate && ` · до ${formatDate(debt.dueDate)}`}
         </div>
       </button>
 
-      <div style={{ fontWeight: 600, fontSize: '0.9375rem', color: owed ? 'var(--success)' : 'var(--danger)' }}>
-        {formatAmount(debt.amount, debt.currency)}
+      <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>
+        <Amount value={owed ? debt.amount : -debt.amount}>{formatAmount(debt.amount, debt.currency)}</Amount>
       </div>
 
       {!debt.settled && (
-        <button className="btn-ghost" style={{ padding: '0.4rem' }} onClick={onSettle} aria-label="Отметить погашенным">
+        <Button variant="ghost" style={{ padding: '0.4rem', border: 'none' }} onClick={onSettle} aria-label="Отметить погашенным">
           <Check size={16} />
-        </button>
+        </Button>
       )}
-      <button className="btn-ghost" style={{ padding: '0.4rem' }} onClick={onDelete} aria-label="Удалить долг">
+      <Button variant="ghost" style={{ padding: '0.4rem', border: 'none' }} onClick={onDelete} aria-label="Удалить долг">
         <Trash2 size={16} />
-      </button>
+      </Button>
     </div>
   )
 }
@@ -304,9 +314,9 @@ function DebtForm({ initial, submitting, onSubmit }: {
         />
       </div>
 
-      <button type="submit" className="btn-primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
+      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
         {submitting ? 'Сохранение…' : 'Сохранить'}
-      </button>
+      </Button>
     </form>
   )
 }

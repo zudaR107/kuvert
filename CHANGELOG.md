@@ -75,6 +75,30 @@ fit best; add a new section if none fits.
   change, distinct from the shared `--success` green so the two don't
   get confused - and fixed the sidebar/header/favicon logo's stroke
   width (2.2 -> 2) to match the shared icon rules.
+- Adopted the rest of `@zudar107/schloss-ui`: every ad hoc button
+  (`.btn-primary`/`.btn-ghost`/`.btn-danger`) across Accounts, Goals,
+  Debts, Transactions, Budget, and Settings now uses the shared
+  `Button` (icon-only ghost buttons keep a borderless look via a style
+  override, matching the platform's existing icon-button convention);
+  Debts' Активные/Закрытые two-button filter is now a `SegmentedControl`;
+  transaction type indicators and debt status are now `Badge`s (a
+  goal's "Достигнуто" pill also moved to `Badge` for the same reason,
+  though not separately called out); account balances, Budget's
+  Available column, debt amounts, and income/expense transaction rows
+  now use `Amount`'s sign-based coloring (transfers keep their own
+  info-blue text, since `Amount` only models gain/loss/neutral, not a
+  third semantic color - forcing one would lose that distinction).
+  Added `StatTile` summary strips to Goals, Debts, and Transactions
+  (aggregated client-side from the already-fetched list, same
+  single-currency assumption Budget's own "Осталось распределить"
+  banner already made). The issue's mention of a shared "Card"
+  component and a "Скоро" badge don't apply here - schloss-ui never
+  shipped a Card component (Account/Goal/Debt cards already used a
+  tinted icon-badge treatment close to the target pattern, just with
+  no component to formally adopt), and "Скоро" is schloss's own
+  placeholder pill, not kuvert's. Also swapped Budget's hardcoded 💰
+  emoji for a real line icon, matching the platform's icon rules.
+  Existing tests kept passing completely unchanged.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
