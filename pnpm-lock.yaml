@@ -72,8 +72,8 @@ importers:
         specifier: ^1.170.17
         version: 1.170.17(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@zudar107/schloss-ui':
-        specifier: ^0.2.0
-        version: 0.2.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: ^0.3.0
+        version: 0.3.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       lucide-react:
         specifier: ^1.23.0
         version: 1.23.0(react@19.2.7)
@@ -1493,8 +1493,8 @@ packages:
   '@vitest/utils@4.1.10':
     resolution: {integrity: sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA==}
 
-  '@zudar107/schloss-ui@0.2.0':
-    resolution: {integrity: sha512-bU7+6ODZ8Mc8x1VmnQoih/Dhm/lpfvxzEo6b7b9YeWMVEDBK2clelYDlm8KugqsrLAwEJO2lZ1uAnMKAeYTyiQ==, tarball: https://npm.pkg.github.com/download/@zudar107/schloss-ui/0.2.0/cdf13dc67e51d2632474d4e4ef99dacb3106819a}
+  '@zudar107/schloss-ui@0.3.0':
+    resolution: {integrity: sha512-c9d0Hd8Bg6xCWHxmZCB6CpBJ/je3VaGHJI3NyQhSWHhRitpWb8rswfj7I2pCpgmC7iYFFEEsXrOl/5YzSMU5Kg==, tarball: https://npm.pkg.github.com/download/@zudar107/schloss-ui/0.3.0/2bec28422880449bbecc8d6b6528f82db675a2b8}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -3366,7 +3366,7 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
-  '@zudar107/schloss-ui@0.2.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@zudar107/schloss-ui@0.3.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       lucide-react: 1.23.0(react@19.2.7)
       react: 19.2.7

@@ -444,7 +444,14 @@ function EmptyState({ accounts, onCreate }: { accounts: Account[]; onCreate: () 
   if (accounts.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
-        <CreditCard size={ICON_SIZE.illustrative} strokeWidth={2} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
+        <div style={{
+          width: 52, height: 52, borderRadius: 14,
+          background: 'var(--bg-base)', color: 'var(--text-muted)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 1rem',
+        }}>
+          <CreditCard size={ICON_SIZE.illustrative} strokeWidth={2} />
+        </div>
         <h2 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
           Сначала добавь счёт
         </h2>
