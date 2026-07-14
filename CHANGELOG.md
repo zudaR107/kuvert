@@ -16,6 +16,13 @@ fit best; add a new section if none fits.
   and render a themed blank div in AuthCallbackPage instead of nothing -
   reduces the flash during the SSO silent-reauth redirect chain, which
   can load and unload this app's pages within a fraction of a second.
+- Fixed logout not actually clearing the session: the cookie is
+  host-only to schlussel's own origin, so a fetch to `/auth/logout`
+  proxied through kuvert's own origin never carried it - the session
+  was never cleared, and the redirect to the login page then silently
+  re-authenticated via the still-valid session, making logout look
+  like it did nothing. Now navigates to schlussel's own `/logout` page
+  (same-origin there) instead.
 
 ## UI
 - Modal primitive; real Accounts, Debts, and Transactions pages (previously

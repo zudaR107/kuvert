@@ -1,9 +1,25 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { buildSchluesselLoginUrl } from '../lib/authRedirect'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { buildSchluesselLoginUrl, buildSchluesselLogoutUrl, CODE_VERIFIER_STORAGE_KEY } from '../lib/authRedirect'
 
 beforeEach(() => {
   sessionStorage.clear()
 })
+
+// Mirrors the stubLocation() convention used in Layout.test.tsx / Header.test.tsx:
+// jsdom allows reassigning window.location for test purposes. We additionally pin
+// `origin` here (those files only needed `href`/`pathname`) since the default
+// return_to depends on window.location.origin.
+function stubLocation(origin: string) {
+  const original = window.location
+  // @ts-expect-error -- jsdom allows reassigning location for test purposes
+  delete window.location
+  // @ts-expect-error -- minimal stub, only `origin`/`href`/`pathname` are read by the code under test
+  window.location = { ...original, origin, href: '', pathname: '/budget' }
+  return () => {
+    // @ts-expect-error -- restoring jsdom's original Location object
+    window.location = original
+  }
+}
 
 describe('buildSchluesselLoginUrl', () => {
   it('points at the schlussel login page by default', async () => {
@@ -57,5 +73,62 @@ describe('buildSchluesselLoginUrl', () => {
     expect(challenge1).not.toBeNull()
     expect(challenge2).not.toBeNull()
     expect(challenge1).not.toBe(challenge2)
+  })
+})
+
+describe('buildSchluesselLogoutUrl', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('points at the schlussel logout page', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', 'https://schlussel.example.com')
+    const url = buildSchluesselLogoutUrl('https://kuvert.test/budget')
+    expect(url.startsWith('https://schlussel.example.com/logout?')).toBe(true)
+  })
+
+  it('falls back to http://localhost:4001 when VITE_SCHLUSSEL_URL is unset', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', undefined)
+    const url = buildSchluesselLogoutUrl('https://kuvert.test/budget')
+    expect(url.startsWith('http://localhost:4001/logout?')).toBe(true)
+  })
+
+  it('encodes an explicit returnTo argument into the return_to query param', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', 'http://localhost:4001')
+    const url = buildSchluesselLogoutUrl('https://kuvert.test/budget')
+
+    expect(url).toContain(`return_to=${encodeURIComponent('https://kuvert.test/budget')}`)
+
+    const params = new URLSearchParams(url.split('?')[1])
+    expect(params.get('return_to')).toBe('https://kuvert.test/budget')
+  })
+
+  it('defaults returnTo to the current page origin plus a trailing slash when omitted', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', 'http://localhost:4001')
+    const restore = stubLocation('https://kuvert.example.com')
+
+    const url = buildSchluesselLogoutUrl()
+    const params = new URLSearchParams(url.split('?')[1])
+    expect(params.get('return_to')).toBe('https://kuvert.example.com/')
+
+    restore()
+  })
+
+  it('does not touch sessionStorage or generate a PKCE code_verifier', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', 'http://localhost:4001')
+    expect(sessionStorage.getItem(CODE_VERIFIER_STORAGE_KEY)).toBeNull()
+
+    buildSchluesselLogoutUrl('https://kuvert.test/budget')
+
+    expect(sessionStorage.getItem(CODE_VERIFIER_STORAGE_KEY)).toBeNull()
+    expect(sessionStorage.length).toBe(0)
+  })
+
+  it('is synchronous and returns a plain string, not a Promise', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', 'http://localhost:4001')
+    const result = buildSchluesselLogoutUrl('https://kuvert.test/budget')
+
+    expect(result).not.toBeInstanceOf(Promise)
+    expect(typeof result).toBe('string')
   })
 })

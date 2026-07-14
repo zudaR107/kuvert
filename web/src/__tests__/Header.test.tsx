@@ -118,7 +118,10 @@ describe('Header user area when a user is present', () => {
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/settings' })
   })
 
-  it("renders a logout button that calls logout() and then redirects to the schlussel login page", async () => {
+  it("renders a logout button that calls logout() and then redirects to schlussel's /logout page", async () => {
+    // The session cookie is host-only to schlussel's own origin, so
+    // kuvert can't clear it itself via a proxied fetch - it navigates to
+    // a same-origin /logout page on schlussel instead.
     const restore = stubLocation()
     const user = userEvent.setup()
     const mockLogout = vi.fn().mockResolvedValue(undefined)
@@ -127,7 +130,7 @@ describe('Header user area when a user is present', () => {
     await user.click(within(header).getByRole('button', { name: /Выйти/ }))
 
     expect(mockLogout).toHaveBeenCalled()
-    expect(window.location.href).toContain('/login')
+    expect(window.location.href).toContain('/logout')
     expect(window.location.href).toContain('return_to=')
     restore()
   })

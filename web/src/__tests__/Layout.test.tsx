@@ -41,7 +41,11 @@ function stubLocation() {
 }
 
 describe('Layout logout', () => {
-  it('redirects to schlussel login after logout resolves', async () => {
+  it('redirects to schlussel\'s /logout page after logout resolves', async () => {
+    // The session cookie is host-only to schlussel's own origin, so
+    // kuvert can't clear it itself via a proxied fetch - it navigates to
+    // a same-origin /logout page on schlussel instead, which does the
+    // real logout and bounces back (see lib/authRedirect.ts).
     const restore = stubLocation()
     const user = userEvent.setup()
     const mockLogout = vi.fn().mockResolvedValue(undefined)
@@ -54,7 +58,7 @@ describe('Layout logout', () => {
     await user.click(within(sidebar).getByRole('button', { name: /Выйти/ }))
 
     expect(mockLogout).toHaveBeenCalled()
-    expect(window.location.href).toContain('/login')
+    expect(window.location.href).toContain('/logout')
     expect(window.location.href).toContain('return_to=')
     restore()
   })
