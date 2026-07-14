@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Target } from 'lucide-react'
-import { EmptyState, ICON_SIZE, Button, Badge, StatTile } from '@zudar107/schloss-ui'
+import { EmptyState, ICON_SIZE, Button, Badge, StatTile, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, toMinorUnits, today } from '../../lib/format'
-import { Modal } from '../../components/Modal'
+import { useToast } from '../../hooks/useToast'
+
+const GOAL_FORM_ID = 'goal-form'
+const CONTRIBUTION_FORM_ID = 'contribution-form'
 
 interface Goal {
   id: string
@@ -45,6 +48,7 @@ function defaultContributionForm(accounts: Account[]): ContributionFormValues {
 
 export function GoalsPage() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [contributingGoal, setContributingGoal] = useState<Goal | null>(null)
 
@@ -66,7 +70,12 @@ export function GoalsPage() {
       recurring: values.recurring,
       recurringDay: values.recurring ? parseInt(values.recurringDay, 10) : null,
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['goals'] }); setCreateModalOpen(false) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals'] })
+      setCreateModalOpen(false)
+      toast.showSuccess('Цель создана')
+    },
+    onError: () => toast.showError('Не удалось создать цель'),
   })
 
   const contributeMutation = useMutation({
@@ -77,7 +86,12 @@ export function GoalsPage() {
         date: values.date,
         note: values.note || null,
       }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['goals'] }); setContributingGoal(null) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals'] })
+      setContributingGoal(null)
+      toast.showSuccess('Пополнение записано')
+    },
+    onError: () => toast.showError('Не удалось записать пополнение'),
   })
 
   return (
@@ -125,23 +139,43 @@ export function GoalsPage() {
         </div>
       )}
 
-      <Modal open={createModalOpen} onClose={() => setCreateModalOpen(false)} title="Новая цель">
-        <GoalForm submitting={createMutation.isPending} onSubmit={(v) => createMutation.mutate(v)} />
+      <Modal
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        title="Новая цель"
+        icon={<Target size={ICON_SIZE.default} strokeWidth={2} />}
+        actions={[{
+          label: createMutation.isPending ? 'Сохранение…' : 'Сохранить',
+          onClick: () => (document.getElementById(GOAL_FORM_ID) as HTMLFormElement | null)?.requestSubmit(),
+          variant: 'primary',
+        }]}
+      >
+        <GoalForm formId={GOAL_FORM_ID} onSubmit={(v) => createMutation.mutate(v)} />
       </Modal>
 
       <Modal
         open={contributingGoal !== null}
         onClose={() => setContributingGoal(null)}
         title={contributingGoal ? `Пополнить «${contributingGoal.name}»` : 'Пополнить цель'}
+        icon={<Plus size={ICON_SIZE.default} strokeWidth={2} />}
+        actions={[{
+          label: contributeMutation.isPending ? 'Сохранение…' : 'Пополнить',
+          onClick: () => (document.getElementById(CONTRIBUTION_FORM_ID) as HTMLFormElement | null)?.requestSubmit(),
+          variant: 'primary',
+        }]}
       >
         {contributingGoal && (
           <ContributionForm
+            formId={CONTRIBUTION_FORM_ID}
             accounts={accounts}
-            submitting={contributeMutation.isPending}
             onSubmit={(values) => contributeMutation.mutate({ goalId: contributingGoal.id, values })}
           />
         )}
       </Modal>
+
+      {toast.toast && (
+        <Toast open variant={toast.toast.variant} message={toast.toast.message} onDismiss={toast.dismiss} />
+      )}
     </div>
   )
 }
@@ -220,8 +254,8 @@ function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: () => void
   )
 }
 
-function GoalForm({ submitting, onSubmit }: {
-  submitting: boolean
+function GoalForm({ formId, onSubmit }: {
+  formId: string
   onSubmit: (values: GoalFormValues) => void
 }) {
   const [values, setValues] = useState<GoalFormValues>(DEFAULT_GOAL_FORM)
@@ -232,45 +266,38 @@ function GoalForm({ submitting, onSubmit }: {
 
   return (
     <form
+      id={formId}
       onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
-      <div>
-        <label className="label" htmlFor="goal-name">Название</label>
-        <input
-          id="goal-name"
-          className="input"
-          value={values.name}
-          onChange={(e) => set('name', e.target.value)}
-          placeholder="Отпуск, подушка безопасности…"
-          required
-        />
-      </div>
+      <Field
+        id="goal-name"
+        label="Название"
+        value={values.name}
+        onChange={(e) => set('name', e.target.value)}
+        placeholder="Отпуск, подушка безопасности…"
+        required
+      />
 
-      <div>
-        <label className="label" htmlFor="goal-target">Целевая сумма</label>
-        <input
-          id="goal-target"
-          className="input"
-          type="number"
-          step="0.01"
-          min="0.01"
-          value={values.targetAmount}
-          onChange={(e) => set('targetAmount', e.target.value)}
-          required
-        />
-      </div>
+      <Field
+        id="goal-target"
+        label="Целевая сумма"
+        type="number"
+        step="0.01"
+        min="0.01"
+        prefix="₽"
+        value={values.targetAmount}
+        onChange={(e) => set('targetAmount', e.target.value)}
+        required
+      />
 
-      <div>
-        <label className="label" htmlFor="goal-deadline">Срок (необязательно)</label>
-        <input
-          id="goal-deadline"
-          className="input"
-          type="date"
-          value={values.deadline}
-          onChange={(e) => set('deadline', e.target.value)}
-        />
-      </div>
+      <Field
+        id="goal-deadline"
+        label="Срок (необязательно)"
+        type="date"
+        value={values.deadline}
+        onChange={(e) => set('deadline', e.target.value)}
+      />
 
       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
         <input
@@ -282,30 +309,23 @@ function GoalForm({ submitting, onSubmit }: {
       </label>
 
       {values.recurring && (
-        <div>
-          <label className="label" htmlFor="goal-recurring-day">День месяца для нового цикла</label>
-          <input
-            id="goal-recurring-day"
-            className="input"
-            type="number"
-            min="1"
-            max="28"
-            value={values.recurringDay}
-            onChange={(e) => set('recurringDay', e.target.value)}
-          />
-        </div>
+        <Field
+          id="goal-recurring-day"
+          label="День месяца для нового цикла"
+          type="number"
+          min="1"
+          max="28"
+          value={values.recurringDay}
+          onChange={(e) => set('recurringDay', e.target.value)}
+        />
       )}
-
-      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
-        {submitting ? 'Сохранение…' : 'Сохранить'}
-      </Button>
     </form>
   )
 }
 
-function ContributionForm({ accounts, submitting, onSubmit }: {
+function ContributionForm({ formId, accounts, onSubmit }: {
+  formId: string
   accounts: Account[]
-  submitting: boolean
   onSubmit: (values: ContributionFormValues) => void
 }) {
   const [values, setValues] = useState<ContributionFormValues>(() => defaultContributionForm(accounts))
@@ -316,62 +336,49 @@ function ContributionForm({ accounts, submitting, onSubmit }: {
 
   return (
     <form
+      id={formId}
       onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
-      <div>
-        <label className="label" htmlFor="contribution-account">Счёт списания</label>
-        <select
-          id="contribution-account"
-          className="input"
-          value={values.accountId}
-          onChange={(e) => set('accountId', e.target.value)}
-          required
-        >
-          {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-      </div>
+      <Field
+        as="select"
+        id="contribution-account"
+        label="Счёт списания"
+        value={values.accountId}
+        onChange={(e) => set('accountId', e.target.value)}
+        required
+      >
+        {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+      </Field>
 
-      <div>
-        <label className="label" htmlFor="contribution-amount">Сумма</label>
-        <input
-          id="contribution-amount"
-          className="input"
-          type="number"
-          step="0.01"
-          min="0.01"
-          value={values.amount}
-          onChange={(e) => set('amount', e.target.value)}
-          required
-        />
-      </div>
+      <Field
+        id="contribution-amount"
+        label="Сумма"
+        type="number"
+        step="0.01"
+        min="0.01"
+        prefix="₽"
+        value={values.amount}
+        onChange={(e) => set('amount', e.target.value)}
+        required
+      />
 
-      <div>
-        <label className="label" htmlFor="contribution-date">Дата</label>
-        <input
-          id="contribution-date"
-          className="input"
-          type="date"
-          value={values.date}
-          onChange={(e) => set('date', e.target.value)}
-          required
-        />
-      </div>
+      <Field
+        id="contribution-date"
+        label="Дата"
+        type="date"
+        value={values.date}
+        onChange={(e) => set('date', e.target.value)}
+        required
+      />
 
-      <div>
-        <label className="label" htmlFor="contribution-note">Заметка</label>
-        <input
-          id="contribution-note"
-          className="input"
-          value={values.note}
-          onChange={(e) => set('note', e.target.value)}
-          placeholder="Необязательно"
-        />
-      </div>
-
-      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
-        {submitting ? 'Сохранение…' : 'Пополнить'}
-      </Button>
+      <Field
+        id="contribution-note"
+        label="Заметка"
+        value={values.note}
+        onChange={(e) => set('note', e.target.value)}
+        placeholder="Необязательно"
+      />
     </form>
   )
 }

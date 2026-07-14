@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Wallet, CreditCard, PiggyBank, Landmark, Archive } from 'lucide-react'
-import { EmptyState, ICON_SIZE, Button, Amount } from '@zudar107/schloss-ui'
+import { EmptyState, ICON_SIZE, Button, Amount, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, toMinorUnits, fromMinorUnits } from '../../lib/format'
-import { Modal } from '../../components/Modal'
+import { useToast } from '../../hooks/useToast'
+
+const ACCOUNT_FORM_ID = 'account-form'
 
 type AccountType = 'checking' | 'cash' | 'credit' | 'savings'
 
@@ -45,6 +47,7 @@ const DEFAULT_FORM: AccountFormValues = {
 
 export function AccountsPage() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Account | null>(null)
 
@@ -55,18 +58,32 @@ export function AccountsPage() {
 
   const createMutation = useMutation({
     mutationFn: (values: AccountFormValues) => api.post('/accounts', toPayload(values)),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['accounts'] }); closeModal() },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      closeModal()
+      toast.showSuccess('Счёт создан')
+    },
+    onError: () => toast.showError('Не удалось создать счёт'),
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, values }: { id: string; values: AccountFormValues }) =>
       api.put(`/accounts/${id}`, toPayload(values)),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['accounts'] }); closeModal() },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      closeModal()
+      toast.showSuccess('Счёт обновлён')
+    },
+    onError: () => toast.showError('Не удалось обновить счёт'),
   })
 
   const archiveMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/accounts/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      toast.showSuccess('Счёт архивирован')
+    },
+    onError: () => toast.showError('Не удалось архивировать счёт'),
   })
 
   function openCreate() {
@@ -129,8 +146,19 @@ export function AccountsPage() {
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={closeModal} title={editing ? 'Изменить счёт' : 'Новый счёт'}>
+      <Modal
+        open={modalOpen}
+        onClose={closeModal}
+        title={editing ? 'Изменить счёт' : 'Новый счёт'}
+        icon={<Landmark size={ICON_SIZE.default} strokeWidth={2} />}
+        actions={[{
+          label: (createMutation.isPending || updateMutation.isPending) ? 'Сохранение…' : 'Сохранить',
+          onClick: () => (document.getElementById(ACCOUNT_FORM_ID) as HTMLFormElement | null)?.requestSubmit(),
+          variant: 'primary',
+        }]}
+      >
         <AccountForm
+          formId={ACCOUNT_FORM_ID}
           initial={editing ? {
             name: editing.name,
             type: editing.type,
@@ -138,10 +166,18 @@ export function AccountsPage() {
             initialBalance: String(fromMinorUnits(editing.initialBalance)),
             color: editing.color,
           } : DEFAULT_FORM}
-          submitting={createMutation.isPending || updateMutation.isPending}
           onSubmit={handleSubmit}
         />
       </Modal>
+
+      {toast.toast && (
+        <Toast
+          open
+          variant={toast.toast.variant}
+          message={toast.toast.message}
+          onDismiss={toast.dismiss}
+        />
+      )}
     </div>
   )
 }
@@ -204,9 +240,9 @@ function AccountCard({ account, onEdit, onArchive }: { account: Account; onEdit:
   )
 }
 
-function AccountForm({ initial, submitting, onSubmit }: {
+function AccountForm({ formId, initial, onSubmit }: {
+  formId: string
   initial: AccountFormValues
-  submitting: boolean
   onSubmit: (values: AccountFormValues) => void
 }) {
   const [values, setValues] = useState(initial)
@@ -217,41 +253,36 @@ function AccountForm({ initial, submitting, onSubmit }: {
 
   return (
     <form
+      id={formId}
       onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
-      <div>
-        <label className="label" htmlFor="account-name">Название</label>
-        <input
-          id="account-name"
-          className="input"
-          value={values.name}
-          onChange={(e) => set('name', e.target.value)}
-          placeholder="Основная карта"
-          required
-        />
-      </div>
+      <Field
+        id="account-name"
+        label="Название"
+        value={values.name}
+        onChange={(e) => set('name', e.target.value)}
+        placeholder="Основная карта"
+        required
+      />
 
-      <div>
-        <label className="label" htmlFor="account-type">Тип</label>
-        <select
-          id="account-type"
-          className="input"
-          value={values.type}
-          onChange={(e) => set('type', e.target.value as AccountType)}
-        >
-          {Object.entries(TYPE_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
-        </select>
-      </div>
+      <Field
+        as="select"
+        id="account-type"
+        label="Тип"
+        value={values.type}
+        onChange={(e) => set('type', e.target.value as AccountType)}
+      >
+        {Object.entries(TYPE_LABELS).map(([value, label]) => (
+          <option key={value} value={value}>{label}</option>
+        ))}
+      </Field>
 
       <div style={{ display: 'flex', gap: '0.75rem' }}>
         <div style={{ flex: 1 }}>
-          <label className="label" htmlFor="account-currency">Валюта</label>
-          <input
+          <Field
             id="account-currency"
-            className="input"
+            label="Валюта"
             value={values.currency}
             onChange={(e) => set('currency', e.target.value.toUpperCase())}
             maxLength={3}
@@ -259,32 +290,26 @@ function AccountForm({ initial, submitting, onSubmit }: {
           />
         </div>
         <div style={{ flex: 1 }}>
-          <label className="label" htmlFor="account-balance">Начальный баланс</label>
-          <input
+          <Field
             id="account-balance"
-            className="input"
+            label="Начальный баланс"
             type="number"
             step="0.01"
+            prefix="₽"
             value={values.initialBalance}
             onChange={(e) => set('initialBalance', e.target.value)}
           />
         </div>
       </div>
 
-      <div>
-        <label className="label" htmlFor="account-color">Цвет</label>
-        <input
-          id="account-color"
-          type="color"
-          value={values.color}
-          onChange={(e) => set('color', e.target.value)}
-          style={{ width: '100%', height: 38, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 2, background: 'var(--bg-surface)' }}
-        />
-      </div>
-
-      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
-        {submitting ? 'Сохранение…' : 'Сохранить'}
-      </Button>
+      <Field
+        id="account-color"
+        label="Цвет"
+        type="color"
+        value={values.color}
+        onChange={(e) => set('color', e.target.value)}
+        style={{ padding: 2 }}
+      />
     </form>
   )
 }

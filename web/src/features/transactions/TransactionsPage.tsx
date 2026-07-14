@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, CreditCard, Receipt, Trash2 } from 'lucide-react'
-import { EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, Amount, StatTile } from '@zudar107/schloss-ui'
+import { EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, Amount, StatTile, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits, today } from '../../lib/format'
-import { Modal } from '../../components/Modal'
+import { useToast } from '../../hooks/useToast'
+
+const TX_FORM_ID = 'transaction-form'
 
 type TxType = 'income' | 'expense' | 'transfer'
 
@@ -56,6 +58,7 @@ function defaultForm(accounts: Account[]): TxFormValues {
 
 export function TransactionsPage() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
@@ -80,18 +83,32 @@ export function TransactionsPage() {
 
   const createMutation = useMutation({
     mutationFn: (values: TxFormValues) => api.post('/transactions', toPayload(values)),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['transactions'] }); closeModal() },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] })
+      closeModal()
+      toast.showSuccess('Транзакция создана')
+    },
+    onError: () => toast.showError('Не удалось создать транзакцию'),
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, values }: { id: string; values: TxFormValues }) =>
       api.put(`/transactions/${id}`, toPayload(values)),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['transactions'] }); closeModal() },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] })
+      closeModal()
+      toast.showSuccess('Транзакция обновлена')
+    },
+    onError: () => toast.showError('Не удалось обновить транзакцию'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/transactions/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['transactions'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] })
+      toast.showSuccess('Транзакция удалена')
+    },
+    onError: () => toast.showError('Не удалось удалить транзакцию'),
   })
 
   function openCreate() {
@@ -174,8 +191,19 @@ export function TransactionsPage() {
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={closeModal} title={editing ? 'Изменить транзакцию' : 'Новая транзакция'}>
+      <Modal
+        open={modalOpen}
+        onClose={closeModal}
+        title={editing ? 'Изменить транзакцию' : 'Новая транзакция'}
+        icon={<Receipt size={ICON_SIZE.default} strokeWidth={2} />}
+        actions={[{
+          label: (createMutation.isPending || updateMutation.isPending) ? 'Сохранение…' : 'Сохранить',
+          onClick: () => (document.getElementById(TX_FORM_ID) as HTMLFormElement | null)?.requestSubmit(),
+          variant: 'primary',
+        }]}
+      >
         <TransactionForm
+          formId={TX_FORM_ID}
           accounts={accounts}
           envelopes={envelopes}
           initial={editing ? {
@@ -187,10 +215,13 @@ export function TransactionsPage() {
             date: editing.date,
             note: editing.note ?? '',
           } : defaultForm(accounts)}
-          submitting={createMutation.isPending || updateMutation.isPending}
           onSubmit={handleSubmit}
         />
       </Modal>
+
+      {toast.toast && (
+        <Toast open variant={toast.toast.variant} message={toast.toast.message} onDismiss={toast.dismiss} />
+      )}
     </div>
   )
 }
@@ -308,11 +339,11 @@ function TransactionRow({ tx, account, envelope, onEdit, onDelete }: {
   )
 }
 
-function TransactionForm({ accounts, envelopes, initial, submitting, onSubmit }: {
+function TransactionForm({ formId, accounts, envelopes, initial, onSubmit }: {
+  formId: string
   accounts: Account[]
   envelopes: Envelope[]
   initial: TxFormValues
-  submitting: boolean
   onSubmit: (values: TxFormValues) => void
 }) {
   const [values, setValues] = useState(initial)
@@ -323,62 +354,70 @@ function TransactionForm({ accounts, envelopes, initial, submitting, onSubmit }:
 
   return (
     <form
+      id={formId}
       onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
-      <div>
-        <label className="label" htmlFor="tx-type">Тип</label>
-        <select id="tx-type" className="input" value={values.type} onChange={(e) => set('type', e.target.value as TxType)}>
-          <option value="expense">Расход</option>
-          <option value="income">Доход</option>
-          <option value="transfer">Перевод</option>
-        </select>
-      </div>
+      <Field as="select" id="tx-type" label="Тип" value={values.type} onChange={(e) => set('type', e.target.value as TxType)}>
+        <option value="expense">Расход</option>
+        <option value="income">Доход</option>
+        <option value="transfer">Перевод</option>
+      </Field>
 
-      <div>
-        <label className="label" htmlFor="tx-account">{values.type === 'transfer' ? 'Со счёта' : 'Счёт'}</label>
-        <select id="tx-account" className="input" value={values.accountId} onChange={(e) => set('accountId', e.target.value)} required>
-          {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-      </div>
+      <Field
+        as="select"
+        id="tx-account"
+        label={values.type === 'transfer' ? 'Со счёта' : 'Счёт'}
+        value={values.accountId}
+        onChange={(e) => set('accountId', e.target.value)}
+        required
+      >
+        {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+      </Field>
 
       {values.type === 'transfer' ? (
-        <div>
-          <label className="label" htmlFor="tx-to-account">На счёт</label>
-          <select id="tx-to-account" className="input" value={values.toAccountId} onChange={(e) => set('toAccountId', e.target.value)} required>
-            <option value="">Выберите счёт</option>
-            {accounts.filter((a) => a.id !== values.accountId).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        </div>
+        <Field
+          as="select"
+          id="tx-to-account"
+          label="На счёт"
+          value={values.toAccountId}
+          onChange={(e) => set('toAccountId', e.target.value)}
+          required
+        >
+          <option value="">Выберите счёт</option>
+          {accounts.filter((a) => a.id !== values.accountId).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </Field>
       ) : (
-        <div>
-          <label className="label" htmlFor="tx-envelope">Конверт</label>
-          <select id="tx-envelope" className="input" value={values.envelopeId} onChange={(e) => set('envelopeId', e.target.value)}>
-            <option value="">Без конверта</option>
-            {envelopes.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
-        </div>
+        <Field
+          as="select"
+          id="tx-envelope"
+          label="Конверт"
+          value={values.envelopeId}
+          onChange={(e) => set('envelopeId', e.target.value)}
+        >
+          <option value="">Без конверта</option>
+          {envelopes.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+        </Field>
       )}
 
       <div style={{ display: 'flex', gap: '0.75rem' }}>
         <div style={{ flex: 1 }}>
-          <label className="label" htmlFor="tx-amount">Сумма</label>
-          <input
+          <Field
             id="tx-amount"
-            className="input"
+            label="Сумма"
             type="number"
             step="0.01"
             min="0.01"
+            prefix="₽"
             value={values.amount}
             onChange={(e) => set('amount', e.target.value)}
             required
           />
         </div>
         <div style={{ flex: 1 }}>
-          <label className="label" htmlFor="tx-date">Дата</label>
-          <input
+          <Field
             id="tx-date"
-            className="input"
+            label="Дата"
             type="date"
             value={values.date}
             onChange={(e) => set('date', e.target.value)}
@@ -387,20 +426,13 @@ function TransactionForm({ accounts, envelopes, initial, submitting, onSubmit }:
         </div>
       </div>
 
-      <div>
-        <label className="label" htmlFor="tx-note">Заметка</label>
-        <input
-          id="tx-note"
-          className="input"
-          value={values.note}
-          onChange={(e) => set('note', e.target.value)}
-          placeholder="Необязательно"
-        />
-      </div>
-
-      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
-        {submitting ? 'Сохранение…' : 'Сохранить'}
-      </Button>
+      <Field
+        id="tx-note"
+        label="Заметка"
+        value={values.note}
+        onChange={(e) => set('note', e.target.value)}
+        placeholder="Необязательно"
+      />
     </form>
   )
 }

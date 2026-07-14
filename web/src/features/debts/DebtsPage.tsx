@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowDownLeft, ArrowUpRight, Check, Handshake, Trash2 } from 'lucide-react'
-import { EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, SegmentedControl, Amount, StatTile } from '@zudar107/schloss-ui'
+import { EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, SegmentedControl, Amount, StatTile, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits } from '../../lib/format'
-import { Modal } from '../../components/Modal'
+import { useToast } from '../../hooks/useToast'
+
+const DEBT_FORM_ID = 'debt-form'
 
 type DebtType = 'owed' | 'owing'
 
@@ -34,6 +36,7 @@ const DEFAULT_FORM: DebtFormValues = {
 
 export function DebtsPage() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [settledFilter, setSettledFilter] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Debt | null>(null)
@@ -45,23 +48,41 @@ export function DebtsPage() {
 
   const createMutation = useMutation({
     mutationFn: (values: DebtFormValues) => api.post('/debts', toPayload(values)),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['debts'] }); closeModal() },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['debts'] })
+      closeModal()
+      toast.showSuccess('Долг создан')
+    },
+    onError: () => toast.showError('Не удалось создать долг'),
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, values }: { id: string; values: DebtFormValues }) =>
       api.put(`/debts/${id}`, toPayload(values)),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['debts'] }); closeModal() },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['debts'] })
+      closeModal()
+      toast.showSuccess('Долг обновлён')
+    },
+    onError: () => toast.showError('Не удалось обновить долг'),
   })
 
   const settleMutation = useMutation({
     mutationFn: (id: string) => api.put(`/debts/${id}`, { settled: true }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['debts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['debts'] })
+      toast.showSuccess('Долг отмечен погашенным')
+    },
+    onError: () => toast.showError('Не удалось отметить долг погашенным'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/debts/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['debts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['debts'] })
+      toast.showSuccess('Долг удалён')
+    },
+    onError: () => toast.showError('Не удалось удалить долг'),
   })
 
   function openCreate() {
@@ -142,8 +163,19 @@ export function DebtsPage() {
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={closeModal} title={editing ? 'Изменить долг' : 'Новый долг'}>
+      <Modal
+        open={modalOpen}
+        onClose={closeModal}
+        title={editing ? 'Изменить долг' : 'Новый долг'}
+        icon={<Handshake size={ICON_SIZE.default} strokeWidth={2} />}
+        actions={[{
+          label: (createMutation.isPending || updateMutation.isPending) ? 'Сохранение…' : 'Сохранить',
+          onClick: () => (document.getElementById(DEBT_FORM_ID) as HTMLFormElement | null)?.requestSubmit(),
+          variant: 'primary',
+        }]}
+      >
         <DebtForm
+          formId={DEBT_FORM_ID}
           initial={editing ? {
             counterparty: editing.counterparty,
             type: editing.type,
@@ -152,10 +184,13 @@ export function DebtsPage() {
             dueDate: editing.dueDate ?? '',
             note: editing.note ?? '',
           } : DEFAULT_FORM}
-          submitting={createMutation.isPending || updateMutation.isPending}
           onSubmit={handleSubmit}
         />
       </Modal>
+
+      {toast.toast && (
+        <Toast open variant={toast.toast.variant} message={toast.toast.message} onDismiss={toast.dismiss} />
+      )}
     </div>
   )
 }
@@ -224,9 +259,9 @@ function DebtRow({ debt, onEdit, onSettle, onDelete }: {
   )
 }
 
-function DebtForm({ initial, submitting, onSubmit }: {
+function DebtForm({ formId, initial, onSubmit }: {
+  formId: string
   initial: DebtFormValues
-  submitting: boolean
   onSubmit: (values: DebtFormValues) => void
 }) {
   const [values, setValues] = useState(initial)
@@ -237,53 +272,48 @@ function DebtForm({ initial, submitting, onSubmit }: {
 
   return (
     <form
+      id={formId}
       onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
-      <div>
-        <label className="label" htmlFor="debt-counterparty">Контрагент</label>
-        <input
-          id="debt-counterparty"
-          className="input"
-          value={values.counterparty}
-          onChange={(e) => set('counterparty', e.target.value)}
-          placeholder="Имя человека"
-          required
-        />
-      </div>
+      <Field
+        id="debt-counterparty"
+        label="Контрагент"
+        value={values.counterparty}
+        onChange={(e) => set('counterparty', e.target.value)}
+        placeholder="Имя человека"
+        required
+      />
 
-      <div>
-        <label className="label" htmlFor="debt-type">Тип</label>
-        <select
-          id="debt-type"
-          className="input"
-          value={values.type}
-          onChange={(e) => set('type', e.target.value as DebtType)}
-        >
-          <option value="owed">Должны мне</option>
-          <option value="owing">Я должен</option>
-        </select>
-      </div>
+      <Field
+        as="select"
+        id="debt-type"
+        label="Тип"
+        value={values.type}
+        onChange={(e) => set('type', e.target.value as DebtType)}
+      >
+        <option value="owed">Должны мне</option>
+        <option value="owing">Я должен</option>
+      </Field>
 
       <div style={{ display: 'flex', gap: '0.75rem' }}>
         <div style={{ flex: 1 }}>
-          <label className="label" htmlFor="debt-amount">Сумма</label>
-          <input
+          <Field
             id="debt-amount"
-            className="input"
+            label="Сумма"
             type="number"
             step="0.01"
             min="0.01"
+            prefix="₽"
             value={values.amount}
             onChange={(e) => set('amount', e.target.value)}
             required
           />
         </div>
         <div style={{ flex: 1 }}>
-          <label className="label" htmlFor="debt-currency">Валюта</label>
-          <input
+          <Field
             id="debt-currency"
-            className="input"
+            label="Валюта"
             value={values.currency}
             onChange={(e) => set('currency', e.target.value.toUpperCase())}
             maxLength={3}
@@ -292,31 +322,21 @@ function DebtForm({ initial, submitting, onSubmit }: {
         </div>
       </div>
 
-      <div>
-        <label className="label" htmlFor="debt-due-date">Срок (необязательно)</label>
-        <input
-          id="debt-due-date"
-          className="input"
-          type="date"
-          value={values.dueDate}
-          onChange={(e) => set('dueDate', e.target.value)}
-        />
-      </div>
+      <Field
+        id="debt-due-date"
+        label="Срок (необязательно)"
+        type="date"
+        value={values.dueDate}
+        onChange={(e) => set('dueDate', e.target.value)}
+      />
 
-      <div>
-        <label className="label" htmlFor="debt-note">Заметка</label>
-        <input
-          id="debt-note"
-          className="input"
-          value={values.note}
-          onChange={(e) => set('note', e.target.value)}
-          placeholder="Необязательно"
-        />
-      </div>
-
-      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
-        {submitting ? 'Сохранение…' : 'Сохранить'}
-      </Button>
+      <Field
+        id="debt-note"
+        label="Заметка"
+        value={values.note}
+        onChange={(e) => set('note', e.target.value)}
+        placeholder="Необязательно"
+      />
     </form>
   )
 }
