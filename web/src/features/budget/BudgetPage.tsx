@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, ClipboardList, Plus } from 'lucide-react'
-import { EmptyState, ICON_SIZE } from '@zudar107/schloss-ui'
+import { ChevronLeft, ChevronRight, ClipboardList, Plus, Wallet } from 'lucide-react'
+import { EmptyState, ICON_SIZE, Button, Amount } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, fromMinorUnits, toMinorUnits, today } from '../../lib/format'
 import { Modal } from '../../components/Modal'
@@ -94,14 +94,14 @@ export function BudgetPage() {
       {/* Period navigation */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <button
-            className="btn-ghost"
-            style={{ padding: '0.375rem' }}
+          <Button
+            variant="ghost"
+            style={{ padding: '0.375rem', border: 'none' }}
             onClick={() => setPeriodIndex((i) => Math.min(i + 1, periods.length - 1))}
             disabled={periodIndex >= periods.length - 1}
           >
             <ChevronLeft size={18} />
-          </button>
+          </Button>
           <div>
             <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
               {currentPeriod?.name ?? '—'}
@@ -110,22 +110,22 @@ export function BudgetPage() {
               {currentPeriod ? `${currentPeriod.startDate} — ${currentPeriod.endDate}` : ''}
             </p>
           </div>
-          <button
-            className="btn-ghost"
-            style={{ padding: '0.375rem' }}
+          <Button
+            variant="ghost"
+            style={{ padding: '0.375rem', border: 'none' }}
             onClick={() => setPeriodIndex((i) => Math.max(i - 1, 0))}
             disabled={periodIndex === 0}
           >
             <ChevronRight size={18} />
-          </button>
+          </Button>
         </div>
-        <button
-          className="btn-primary"
+        <Button
+          variant="primary"
           style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }}
           onClick={() => setModalOpen(true)}
         >
           <Plus size={15} /> Новый бюджет
-        </button>
+        </Button>
       </div>
 
       {/* To Be Budgeted banner */}
@@ -233,9 +233,9 @@ function PeriodForm({ submitting, onSubmit }: {
         </div>
       </div>
 
-      <button type="submit" className="btn-primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
+      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
         {submitting ? 'Сохранение…' : 'Сохранить'}
-      </button>
+      </Button>
     </form>
   )
 }
@@ -260,9 +260,9 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
             width: 28, height: 28, borderRadius: 6,
             background: `${row.envelope.color}20`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '0.875rem',
+            color: row.envelope.color,
           }}>
-            💰
+            <Wallet size={ICON_SIZE.default} strokeWidth={2} />
           </div>
           <div>
             <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{row.envelope.name}</div>
@@ -320,8 +320,8 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
       </td>
 
       {/* Available */}
-      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 600, color: over ? 'var(--danger)' : 'var(--success)' }}>
-        {formatAmount(row.available)}
+      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 600 }}>
+        <Amount value={row.available}>{formatAmount(Math.abs(row.available))}</Amount>
       </td>
     </tr>
   )

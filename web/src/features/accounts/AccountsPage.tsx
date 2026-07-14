@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Wallet, CreditCard, PiggyBank, Landmark, Archive } from 'lucide-react'
-import { EmptyState, ICON_SIZE } from '@zudar107/schloss-ui'
+import { EmptyState, ICON_SIZE, Button, Amount } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, toMinorUnits, fromMinorUnits } from '../../lib/format'
 import { Modal } from '../../components/Modal'
@@ -100,9 +100,9 @@ export function AccountsPage() {
             {accounts.length} {accounts.length === 1 ? 'счёт' : 'счетов'}
           </p>
         </div>
-        <button className="btn-primary" style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }} onClick={openCreate}>
+        <Button variant="primary" style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }} onClick={openCreate}>
           <Plus size={15} /> Новый счёт
-        </button>
+        </Button>
       </div>
 
       {isLoading ? (
@@ -181,23 +181,25 @@ function AccountCard({ account, onEdit, onArchive }: { account: Account; onEdit:
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{TYPE_LABELS[account.type]}</div>
           </div>
         </div>
-        <button
-          className="btn-ghost"
-          style={{ padding: '0.3rem' }}
+        <Button
+          variant="ghost"
+          style={{ padding: '0.3rem', border: 'none' }}
           onClick={onArchive}
           aria-label="Архивировать счёт"
         >
           <Archive size={15} />
-        </button>
+        </Button>
       </div>
 
-      <div style={{ fontSize: '1.375rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
-        {data ? formatAmount(data.balance, account.currency) : '…'}
+      <div style={{ fontSize: '1.375rem', fontWeight: 700, marginBottom: '0.75rem' }}>
+        {data ? (
+          <Amount value={data.balance}>{formatAmount(Math.abs(data.balance), account.currency)}</Amount>
+        ) : '…'}
       </div>
 
-      <button className="btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8125rem' }} onClick={onEdit}>
+      <Button variant="ghost" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8125rem', border: 'none' }} onClick={onEdit}>
         Изменить
-      </button>
+      </Button>
     </div>
   )
 }
@@ -280,9 +282,9 @@ function AccountForm({ initial, submitting, onSubmit }: {
         />
       </div>
 
-      <button type="submit" className="btn-primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
+      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
         {submitting ? 'Сохранение…' : 'Сохранить'}
-      </button>
+      </Button>
     </form>
   )
 }
