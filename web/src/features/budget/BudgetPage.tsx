@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, ClipboardList, Plus, Wallet } from 'lucide-react'
-import { EmptyState, ICON_SIZE, Button, Amount } from '@zudar107/schloss-ui'
+import { EmptyState, ICON_SIZE, Button, Amount, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, fromMinorUnits, toMinorUnits, today } from '../../lib/format'
-import { Modal } from '../../components/Modal'
+import { useToast } from '../../hooks/useToast'
+
+const PERIOD_FORM_ID = 'period-form'
 
 interface Period { id: string; name: string; startDate: string; endDate: string }
 interface Envelope { id: string; name: string; icon: string; color: string; rolloverEnabled: boolean }
@@ -34,6 +36,7 @@ function defaultPeriodForm(): PeriodFormValues {
 
 export function BudgetPage() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [periodIndex, setPeriodIndex] = useState(0)
   const [modalOpen, setModalOpen] = useState(false)
 
@@ -54,6 +57,7 @@ export function BudgetPage() {
     mutationFn: ({ envelopeId, allocated }: { envelopeId: string; allocated: number }) =>
       api.put(`/periods/${currentPeriod!.id}/budget/${envelopeId}`, { allocated }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['budget'] }),
+    onError: () => toast.showError('Не удалось обновить распределение'),
   })
 
   const createPeriodMutation = useMutation({
@@ -62,13 +66,29 @@ export function BudgetPage() {
       qc.invalidateQueries({ queryKey: ['periods'] })
       setPeriodIndex(0)
       setModalOpen(false)
+      toast.showSuccess('Бюджетный период создан')
     },
+    onError: () => toast.showError('Не удалось создать бюджетный период'),
   })
 
   const periodModal = (
-    <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Новый бюджетный период">
-      <PeriodForm submitting={createPeriodMutation.isPending} onSubmit={(v) => createPeriodMutation.mutate(v)} />
+    <Modal
+      open={modalOpen}
+      onClose={() => setModalOpen(false)}
+      title="Новый бюджетный период"
+      icon={<ClipboardList size={ICON_SIZE.default} strokeWidth={2} />}
+      actions={[{
+        label: createPeriodMutation.isPending ? 'Сохранение…' : 'Сохранить',
+        onClick: () => (document.getElementById(PERIOD_FORM_ID) as HTMLFormElement | null)?.requestSubmit(),
+        variant: 'primary',
+      }]}
+    >
+      <PeriodForm formId={PERIOD_FORM_ID} onSubmit={(v) => createPeriodMutation.mutate(v)} />
     </Modal>
+  )
+
+  const toastNode = toast.toast && (
+    <Toast open variant={toast.toast.variant} message={toast.toast.message} onDismiss={toast.dismiss} />
   )
 
   if (!periods.length) {
@@ -83,6 +103,7 @@ export function BudgetPage() {
           onAction={() => setModalOpen(true)}
         />
         {periodModal}
+        {toastNode}
       </>
     )
   }
@@ -177,12 +198,13 @@ export function BudgetPage() {
         </div>
       )}
       {periodModal}
+      {toastNode}
     </div>
   )
 }
 
-function PeriodForm({ submitting, onSubmit }: {
-  submitting: boolean
+function PeriodForm({ formId, onSubmit }: {
+  formId: string
   onSubmit: (values: PeriodFormValues) => void
 }) {
   const [values, setValues] = useState<PeriodFormValues>(defaultPeriodForm)
@@ -193,27 +215,24 @@ function PeriodForm({ submitting, onSubmit }: {
 
   return (
     <form
+      id={formId}
       onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
-      <div>
-        <label className="label" htmlFor="period-name">Название</label>
-        <input
-          id="period-name"
-          className="input"
-          value={values.name}
-          onChange={(e) => set('name', e.target.value)}
-          placeholder="Июль 2026"
-          required
-        />
-      </div>
+      <Field
+        id="period-name"
+        label="Название"
+        value={values.name}
+        onChange={(e) => set('name', e.target.value)}
+        placeholder="Июль 2026"
+        required
+      />
 
       <div style={{ display: 'flex', gap: '0.75rem' }}>
         <div style={{ flex: 1 }}>
-          <label className="label" htmlFor="period-start">Начало</label>
-          <input
+          <Field
             id="period-start"
-            className="input"
+            label="Начало"
             type="date"
             value={values.startDate}
             onChange={(e) => set('startDate', e.target.value)}
@@ -221,10 +240,9 @@ function PeriodForm({ submitting, onSubmit }: {
           />
         </div>
         <div style={{ flex: 1 }}>
-          <label className="label" htmlFor="period-end">Конец</label>
-          <input
+          <Field
             id="period-end"
-            className="input"
+            label="Конец"
             type="date"
             value={values.endDate}
             onChange={(e) => set('endDate', e.target.value)}
@@ -232,10 +250,6 @@ function PeriodForm({ submitting, onSubmit }: {
           />
         </div>
       </div>
-
-      <Button type="submit" variant="primary" disabled={submitting} style={{ justifyContent: 'center', padding: '0.625rem', marginTop: '0.25rem' }}>
-        {submitting ? 'Сохранение…' : 'Сохранить'}
-      </Button>
     </form>
   )
 }

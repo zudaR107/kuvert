@@ -99,6 +99,24 @@ fit best; add a new section if none fits.
   placeholder pill, not kuvert's. Also swapped Budget's hardcoded 💰
   emoji for a real line icon, matching the platform's icon rules.
   Existing tests kept passing completely unchanged.
+- Adopted the last three pieces of `@zudar107/schloss-ui`: every
+  create/edit form's inputs across Accounts, Goals, Debts,
+  Transactions, and Budget periods (plus Settings' currency select)
+  now use the shared `Field` (currency prefix on amount fields, real
+  labels); the local `Modal` component is replaced by the shared one
+  everywhere (icon-in-title, real icon close-button, footer actions
+  built from the shared `Button` with primary rightmost) and deleted
+  outright, now unused; and the shared `Toast` gets its first real
+  usage anywhere on the platform - a success toast after each
+  create/update/archive/settle/delete resolves, an error toast on a
+  failed request, via a small new `useToast` hook shared across pages.
+  Each form's submit button now lives in the Modal's footer rather
+  than inside the form itself - the form keeps its native `onSubmit`
+  handling, and the footer button triggers it via `id` +
+  `HTMLFormElement.requestSubmit()` rather than an inline button.
+  Existing tests kept passing completely unchanged; new tests for
+  `useToast` and the first page's toast wiring were written by an
+  independent subagent from a behavioral spec.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.

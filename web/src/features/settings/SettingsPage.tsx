@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Button } from '@zudar107/schloss-ui'
+import { Button, Field, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
+import { useToast } from '../../hooks/useToast'
 
 interface UserProfile {
   id: string
@@ -14,6 +15,7 @@ const CURRENCIES = ['RUB', 'USD', 'EUR', 'GBP', 'KZT', 'AMD', 'GEL']
 
 export function SettingsPage() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [currency, setCurrency] = useState('RUB')
   const [saved, setSaved] = useState(false)
 
@@ -33,6 +35,7 @@ export function SettingsPage() {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     },
+    onError: () => toast.showError('Не удалось сохранить настройки'),
   })
 
   function handleSubmit(e: React.FormEvent) {
@@ -64,17 +67,15 @@ export function SettingsPage() {
               </div>
             )}
 
-            <div>
-              <label className="label" htmlFor="settings-currency">Основная валюта</label>
-              <select
-                id="settings-currency"
-                className="input"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-              >
-                {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
+            <Field
+              as="select"
+              id="settings-currency"
+              label="Основная валюта"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+            >
+              {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </Field>
 
             <Button
               type="submit"
@@ -87,6 +88,10 @@ export function SettingsPage() {
           </form>
         )}
       </div>
+
+      {toast.toast && (
+        <Toast open variant={toast.toast.variant} message={toast.toast.message} onDismiss={toast.dismiss} />
+      )}
     </div>
   )
 }

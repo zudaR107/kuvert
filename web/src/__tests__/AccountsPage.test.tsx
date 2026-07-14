@@ -443,3 +443,95 @@ describe('AccountsPage edit flow', () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Toast notifications
+// ---------------------------------------------------------------------------
+describe('AccountsPage toast notifications', () => {
+  it('shows a success toast containing "Счёт создан" after a successful create', async () => {
+    mockApiWithAccounts([])
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-acc' })
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+
+    await user.click(await screen.findByRole('button', { name: 'Новый счёт' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый счёт' })
+
+    const nameInput = within(dialog).getAllByRole('textbox')[0]
+    await user.type(nameInput, 'Копилка')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('Счёт создан')
+  })
+
+  it('shows a failure toast when creating an account fails', async () => {
+    mockApiWithAccounts([])
+    vi.mocked(api.post).mockRejectedValueOnce(new Error('boom'))
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+
+    await user.click(await screen.findByRole('button', { name: 'Новый счёт' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый счёт' })
+
+    const nameInput = within(dialog).getAllByRole('textbox')[0]
+    await user.type(nameInput, 'Копилка')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    const status = await screen.findByRole('status')
+    expect(status.textContent ?? '').toMatch(/не удалось создать счёт/i)
+  })
+
+  it('shows a success toast containing "Счёт архивирован" after a successful archive', async () => {
+    mockApiWithAccounts([checkingAccount, cashAccount], { 'acc-1': 100, 'acc-2': 200 })
+    vi.mocked(api.delete).mockResolvedValue({})
+    const user = userEvent.setup()
+
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Основной счёт')
+
+    const archiveButtons = screen.getAllByRole('button', { name: 'Архивировать счёт' })
+    await user.click(archiveButtons[0])
+
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('Счёт архивирован')
+  })
+
+  it('a later toast replaces an earlier one still visible on screen, rather than stacking', async () => {
+    mockApiWithAccounts([checkingAccount, cashAccount], { 'acc-1': 100, 'acc-2': 200 })
+    vi.mocked(api.post).mockRejectedValueOnce(new Error('boom'))
+    vi.mocked(api.delete).mockResolvedValue({})
+    const user = userEvent.setup()
+
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Основной счёт')
+
+    // Trigger a create failure first.
+    await user.click(await screen.findByRole('button', { name: 'Новый счёт' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый счёт' })
+    const nameInput = within(dialog).getAllByRole('textbox')[0]
+    await user.type(nameInput, 'Копилка')
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    const failureStatus = await screen.findByRole('status')
+    expect(failureStatus.textContent ?? '').toMatch(/не удалось создать счёт/i)
+
+    // Immediately trigger an archive success while the failure toast is showing.
+    const archiveButtons = screen.getAllByRole('button', { name: 'Архивировать счёт' })
+    await user.click(archiveButtons[0])
+
+    await vi.waitFor(() => {
+      const statuses = screen.getAllByRole('status')
+      expect(statuses.length).toBe(1)
+      expect(statuses[0]).toHaveTextContent('Счёт архивирован')
+    })
+
+    // The earlier failure message should no longer be present anywhere.
+    expect(screen.queryByText(/не удалось создать счёт/i)).not.toBeInTheDocument()
+  })
+})
