@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Wallet, CreditCard, PiggyBank, Landmark, Archive } from 'lucide-react'
+import { EmptyState, ICON_SIZE } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, toMinorUnits, fromMinorUnits } from '../../lib/format'
 import { Modal } from '../../components/Modal'
@@ -107,7 +108,14 @@ export function AccountsPage() {
       {isLoading ? (
         <SkeletonGrid />
       ) : accounts.length === 0 ? (
-        <EmptyState onCreate={openCreate} />
+        <EmptyState
+          icon={<Landmark size={ICON_SIZE.illustrative} strokeWidth={2} />}
+          title="Счетов пока нет"
+          description="Счёт — это реальные деньги: карта, кошелёк, вклад. Категории расходов — в «Бюджете»."
+          actionLabel="Добавить счёт"
+          actionIcon={<Plus size={16} />}
+          onAction={openCreate}
+        />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
           {accounts.map((a) => (
@@ -276,21 +284,6 @@ function AccountForm({ initial, submitting, onSubmit }: {
         {submitting ? 'Сохранение…' : 'Сохранить'}
       </button>
     </form>
-  )
-}
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '4rem 2rem', maxWidth: 440, margin: '0 auto' }}>
-      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏦</div>
-      <h2 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
-        Счетов пока нет
-      </h2>
-      <p style={{ margin: '0 0 1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-        Счёт — это реальные деньги: карта, кошелёк, вклад. Категории расходов — в «Бюджете».
-      </p>
-      <button className="btn-primary" onClick={onCreate}><Plus size={16} /> Добавить счёт</button>
-    </div>
   )
 }
 

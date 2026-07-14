@@ -10,6 +10,7 @@ import type { AuthUser } from '../hooks/useAuth'
 // ---------------------------------------------------------------------------
 vi.mock('@tanstack/react-router', () => ({
   useLocation: () => ({ pathname: '/budget' }),
+  useNavigate: () => vi.fn(),
   Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
     <a href={to} {...rest}>{children}</a>
   ),

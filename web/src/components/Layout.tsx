@@ -183,7 +183,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             borderRadius: 8, flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
               <rect x="2" y="5" width="20" height="15" rx="2" />
               <path d="M2 10h20" />
             </svg>

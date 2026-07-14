@@ -61,6 +61,20 @@ fit best; add a new section if none fits.
   (which does carry identity/settings/logout) is hidden entirely below
   the mobile breakpoint. Sits alongside the sidebar's own controls
   rather than replacing them.
+- Adopted `@zudar107/schloss-ui`: Header and Footer now wrap the shared
+  package's versions (the user's name is now shown as a single-initial
+  avatar instead of visible text, and settings is a callback-driven
+  button instead of a router link - both real, intentional design
+  changes); replaced the emoji-based empty states across Budget,
+  Accounts, Goals, Debts, and Transactions with the shared `EmptyState`
+  component and real line icons (kept the two non-actionable cases -
+  the closed-debts tab and "add an account first" - as local elements,
+  since the shared component always requires an action button and
+  forcing one there would be a bad match). Switched the platform's old
+  shared blue to kuvert's own teal accent (`#0d9488`) - a real color
+  change, distinct from the shared `--success` green so the two don't
+  get confused - and fixed the sidebar/header/favicon logo's stroke
+  width (2.2 -> 2) to match the shared icon rules.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.

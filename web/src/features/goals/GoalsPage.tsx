@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Target } from 'lucide-react'
+import { EmptyState, ICON_SIZE } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, toMinorUnits, today } from '../../lib/format'
 import { Modal } from '../../components/Modal'
@@ -98,7 +99,14 @@ export function GoalsPage() {
       {isLoading ? (
         <SkeletonGrid />
       ) : goals.length === 0 ? (
-        <EmptyState onCreate={() => setCreateModalOpen(true)} />
+        <EmptyState
+          icon={<Target size={ICON_SIZE.illustrative} strokeWidth={2} />}
+          title="Целей пока нет"
+          description="Определи, на что хочешь копить."
+          actionLabel="Создать первую цель"
+          actionIcon={<Plus size={16} />}
+          onAction={() => setCreateModalOpen(true)}
+        />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
           {goals.map((g) => (
@@ -363,21 +371,6 @@ function ContributionForm({ accounts, submitting, onSubmit }: {
         {submitting ? 'Сохранение…' : 'Пополнить'}
       </button>
     </form>
-  )
-}
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
-      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎯</div>
-      <h2 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
-        Целей пока нет
-      </h2>
-      <p style={{ margin: '0 0 1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-        Определи, на что хочешь копить.
-      </p>
-      <button className="btn-primary" onClick={onCreate}><Plus size={16} /> Создать первую цель</button>
-    </div>
   )
 }
 

@@ -5,9 +5,14 @@ import type { AuthUser } from '../hooks/useAuth'
 
 // ---------------------------------------------------------------------------
 // Mock TanStack Router — same pattern as Layout.test.tsx / sidebarResize.test.tsx.
+// useNavigate is captured (not just stubbed) so the settings-button test
+// below can assert it was actually called - the shared Header calls
+// onSettings via a plain callback now, not a router <Link href>.
 // ---------------------------------------------------------------------------
+const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
   useLocation: () => ({ pathname: '/budget' }),
+  useNavigate: () => mockNavigate,
   Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
     <a href={to} {...rest}>{children}</a>
   ),
@@ -64,6 +69,7 @@ function stubLocation() {
 afterEach(() => {
   cleanup()
   vi.unstubAllEnvs()
+  mockNavigate.mockClear()
 })
 
 describe('Header home link', () => {
@@ -90,16 +96,26 @@ describe('Header home link', () => {
 })
 
 describe('Header user area when a user is present', () => {
-  it('shows the user name as visible text', async () => {
+  it('shows the user as a single-initial avatar with the full name in a title tooltip', async () => {
+    // The shared Header replaces the visible name text with an avatar
+    // circle (an intentional design change, not a mechanical swap) - the
+    // full name is still available, just via the title attribute.
     const { header } = await renderLayout(mockUser)
-    expect(within(header).getByText('Jane Doe')).toBeInTheDocument()
+    expect(within(header).queryByText('Jane Doe')).not.toBeInTheDocument()
+    const avatar = within(header).getByTitle('Jane Doe')
+    expect(avatar).toHaveTextContent('J')
   })
 
-  it('renders a link to /settings', async () => {
+  it('calls navigate to /settings when the settings button is clicked', async () => {
+    // The shared Header wires settings through an onSettings callback
+    // (a button), not a router <Link href="/settings"> - a real
+    // interaction-mechanism change, not just a mechanical test fix.
+    const user = userEvent.setup()
     const { header } = await renderLayout(mockUser)
-    const links = within(header).getAllByRole('link') as HTMLAnchorElement[]
-    const settingsLink = links.find((a) => a.getAttribute('href') === '/settings')
-    expect(settingsLink).toBeTruthy()
+
+    await user.click(within(header).getByRole('button', { name: 'Настройки' }))
+
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/settings' })
   })
 
   it("renders a logout button that calls logout() and then redirects to the schlussel login page", async () => {
@@ -134,13 +150,12 @@ describe('Header user area when a user is present', () => {
 })
 
 describe('Header user area when there is no user', () => {
-  it('does not render the settings link, the logout button, or any name text', async () => {
+  it('does not render the settings button, the logout button, the avatar, or any name text', async () => {
     const { header } = await renderLayout(null)
 
     expect(within(header).queryByRole('button', { name: /Выйти/ })).not.toBeInTheDocument()
+    expect(within(header).queryByRole('button', { name: 'Настройки' })).not.toBeInTheDocument()
     expect(within(header).queryByText('Jane Doe')).not.toBeInTheDocument()
-    const links = within(header).getAllByRole('link') as HTMLAnchorElement[]
-    const settingsLink = links.find((a) => a.getAttribute('href') === '/settings')
-    expect(settingsLink).toBeFalsy()
+    expect(within(header).queryByTitle('Jane Doe')).not.toBeInTheDocument()
   })
 })

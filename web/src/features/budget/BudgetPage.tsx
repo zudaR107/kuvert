@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ClipboardList, Plus } from 'lucide-react'
+import { EmptyState, ICON_SIZE } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, fromMinorUnits, toMinorUnits, today } from '../../lib/format'
 import { Modal } from '../../components/Modal'
@@ -73,7 +74,14 @@ export function BudgetPage() {
   if (!periods.length) {
     return (
       <>
-        <EmptyState onCreate={() => setModalOpen(true)} />
+        <EmptyState
+          icon={<ClipboardList size={ICON_SIZE.illustrative} strokeWidth={2} />}
+          title="Бюджет не создан"
+          description="Раздели доходы по конвертам — счета настраиваются отдельно, на странице «Счета»."
+          actionLabel="Создать бюджет"
+          actionIcon={<Plus size={16} />}
+          onAction={() => setModalOpen(true)}
+        />
         {periodModal}
       </>
     )
@@ -316,21 +324,6 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
         {formatAmount(row.available)}
       </td>
     </tr>
-  )
-}
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '4rem 2rem', maxWidth: 440, margin: '0 auto' }}>
-      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📋</div>
-      <h2 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
-        Бюджет не создан
-      </h2>
-      <p style={{ margin: '0 0 1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-        Раздели доходы по конвертам — счета настраиваются отдельно, на странице «Счета».
-      </p>
-      <button className="btn-primary" onClick={onCreate}><Plus size={16} /> Создать бюджет</button>
-    </div>
   )
 }
 

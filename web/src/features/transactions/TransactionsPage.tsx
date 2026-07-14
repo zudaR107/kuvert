@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, Trash2 } from 'lucide-react'
+import { Plus, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, CreditCard, Receipt, Trash2 } from 'lucide-react'
+import { EmptyState as SharedEmptyState, ICON_SIZE } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits, today } from '../../lib/format'
 import { Modal } from '../../components/Modal'
@@ -382,10 +383,13 @@ function TransactionForm({ accounts, envelopes, initial, submitting, onSubmit }:
 }
 
 function EmptyState({ accounts, onCreate }: { accounts: Account[]; onCreate: () => void }) {
+  // No accounts yet isn't actionable from this page - there's nothing to
+  // create a transaction against, so it doesn't fit the shared
+  // EmptyState's required action button (the fix is on another page).
   if (accounts.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>💳</div>
+        <CreditCard size={ICON_SIZE.illustrative} strokeWidth={2} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
         <h2 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
           Сначала добавь счёт
         </h2>
@@ -396,16 +400,14 @@ function EmptyState({ accounts, onCreate }: { accounts: Account[]; onCreate: () 
     )
   }
   return (
-    <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
-      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🧾</div>
-      <h2 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
-        Транзакций пока нет
-      </h2>
-      <p style={{ margin: '0 0 1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-        Запиши первый доход или расход.
-      </p>
-      <button className="btn-primary" onClick={onCreate}><Plus size={16} /> Добавить транзакцию</button>
-    </div>
+    <SharedEmptyState
+      icon={<Receipt size={ICON_SIZE.illustrative} strokeWidth={2} />}
+      title="Транзакций пока нет"
+      description="Запиши первый доход или расход."
+      actionLabel="Добавить транзакцию"
+      actionIcon={<Plus size={16} />}
+      onAction={onCreate}
+    />
   )
 }
 

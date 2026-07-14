@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ArrowDownLeft, ArrowUpRight, Check, Trash2 } from 'lucide-react'
+import { Plus, ArrowDownLeft, ArrowUpRight, Check, Handshake, Trash2 } from 'lucide-react'
+import { EmptyState as SharedEmptyState, ICON_SIZE } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits } from '../../lib/format'
 import { Modal } from '../../components/Modal'
@@ -311,21 +312,29 @@ function DebtForm({ initial, submitting, onSubmit }: {
 }
 
 function EmptyState({ settledFilter, onCreate }: { settledFilter: boolean; onCreate: () => void }) {
+  // The "closed debts" tab being empty isn't actionable - there's nothing
+  // to create from there, so it doesn't fit the shared EmptyState's
+  // required action button. Only the "active debts" case (which does have
+  // a real call to action) uses the shared component.
+  if (settledFilter) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+        <Handshake size={ICON_SIZE.illustrative} strokeWidth={2} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
+        <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
+          Закрытых долгов нет
+        </h2>
+      </div>
+    )
+  }
   return (
-    <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
-      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🤝</div>
-      <h2 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
-        {settledFilter ? 'Закрытых долгов нет' : 'Активных долгов нет'}
-      </h2>
-      {!settledFilter && (
-        <>
-          <p style={{ margin: '0 0 1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-            Отмечай, кто кому должен.
-          </p>
-          <button className="btn-primary" onClick={onCreate}><Plus size={16} /> Добавить долг</button>
-        </>
-      )}
-    </div>
+    <SharedEmptyState
+      icon={<Handshake size={ICON_SIZE.illustrative} strokeWidth={2} />}
+      title="Активных долгов нет"
+      description="Отмечай, кто кому должен."
+      actionLabel="Добавить долг"
+      actionIcon={<Plus size={16} />}
+      onAction={onCreate}
+    />
   )
 }
 
