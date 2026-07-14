@@ -8,7 +8,7 @@ import { Toast } from '@zudar107/schloss-ui'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { type Theme, THEMES, getStoredTheme, applyTheme } from '../lib/theme'
-import { buildSchluesselLoginUrl } from '../lib/authRedirect'
+import { buildSchluesselLogoutUrl } from '../lib/authRedirect'
 import { Footer } from './Footer'
 import { Header } from './Header'
 
@@ -127,11 +127,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   async function handleLogout() {
     try {
       await logout()
-      window.location.href = await buildSchluesselLoginUrl(pathname)
+      window.location.href = buildSchluesselLogoutUrl()
     } catch (err) {
-      // Without this, a failed logout (or the PKCE redirect URL build
-      // that follows it) silently did nothing visible - the button
-      // looked broken rather than surfacing what went wrong.
+      // Without this, a failed logout silently did nothing visible - the
+      // button looked broken rather than surfacing what went wrong.
       console.error('Logout failed', err)
       toast.showError('Не удалось выйти. Попробуйте ещё раз.')
     }

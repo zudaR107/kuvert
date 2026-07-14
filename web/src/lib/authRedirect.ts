@@ -25,3 +25,17 @@ export async function buildSchluesselLoginUrl(currentPath: string, origin: strin
   })
   return `${schluesselUrl}/login?${params.toString()}`
 }
+
+// The session cookie is host-only to schlussel's own origin (no Domain
+// attribute, by design - it's never shared cross-subdomain), so kuvert
+// can never clear it itself via a fetch proxied through its own origin -
+// that request is same-origin from the browser's point of view (kuvert's,
+// not schlussel's), and the cookie simply never gets sent. Instead this
+// sends the browser to a real page hosted by schlussel (same-origin with
+// the cookie there), which does the actual logout and bounces back to
+// returnTo - the router's own beforeLoad guard then naturally redirects
+// to login again, since there's no valid session left.
+export function buildSchluesselLogoutUrl(returnTo: string = `${window.location.origin}/`): string {
+  const schluesselUrl = import.meta.env.VITE_SCHLUSSEL_URL ?? DEFAULT_SCHLUSSEL_URL
+  return `${schluesselUrl}/logout?return_to=${encodeURIComponent(returnTo)}`
+}
