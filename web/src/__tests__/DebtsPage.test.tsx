@@ -565,3 +565,40 @@ describe('DebtsPage edit flow', () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// placeholderData: switching the settled/active filter keeps showing the
+// previous list while the new one is still loading, then swaps once it
+// arrives.
+// ---------------------------------------------------------------------------
+describe('DebtsPage keeps previous list visible while switching filters', () => {
+  it('still shows the active list while the settled fetch is in flight, then swaps to the settled list once it resolves', async () => {
+    // The initial (active) fetch resolves right away; the very next api.get
+    // call (triggered by switching the filter) is left perpetually pending
+    // until we manually resolve it below.
+    let resolveSettled: (value: unknown) => void = () => {}
+    const settledPromise = new Promise((resolve) => {
+      resolveSettled = resolve
+    })
+    vi.mocked(api.get)
+      .mockImplementationOnce(() => Promise.resolve([owedDebt]))
+      .mockImplementationOnce(() => settledPromise)
+
+    const user = userEvent.setup()
+    render(<DebtsPage />, { wrapper: createWrapper() })
+    // Capture the filter buttons synchronously, before any debt rows mount.
+    const filterButtons = getFilterButtons()
+    await screen.findByText('Иван Петров')
+
+    await switchToSettledFilter(user, filterButtons)
+
+    // The settled fetch is still pending (never resolved) — the previously
+    // loaded active-list content must remain on screen, not be cleared.
+    expect(screen.getByText('Иван Петров')).toBeInTheDocument()
+
+    resolveSettled([settledDebt])
+
+    await waitFor(() => expect(screen.getByText('Алексей Смирнов')).toBeInTheDocument())
+    expect(screen.queryByText('Иван Петров')).not.toBeInTheDocument()
+  })
+})

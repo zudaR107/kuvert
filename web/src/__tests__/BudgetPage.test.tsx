@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BudgetPage } from '../features/budget/BudgetPage'
@@ -364,5 +364,83 @@ describe('BudgetPage create-period modal', () => {
     await vi.waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Новый бюджетный период' })).not.toBeInTheDocument()
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// placeholderData: navigating to a different period keeps showing the
+// previous period's budget while the new one is still loading, then swaps
+// once it arrives.
+// ---------------------------------------------------------------------------
+describe('BudgetPage keeps previous period visible while navigating', () => {
+  it('still shows the previous period budget while the new period fetch is in flight, then swaps once it resolves', async () => {
+    const periodA = mockPeriod // "Июль 2024"
+    const periodB = {
+      id: 'period-2',
+      name: 'Август 2024',
+      startDate: '2024-08-01',
+      endDate: '2024-08-31',
+    }
+    const budgetDataA = mockBudgetData // envelope "Продукты"
+    const budgetDataB = {
+      period: periodB,
+      toBeBudgeted: 3000,
+      envelopes: [
+        {
+          envelope: { id: 'env-2', name: 'Транспорт', icon: '🚌', color: '#2196f3', rolloverEnabled: false },
+          allocated: 10000,
+          carriedOver: 0,
+          available: 8000,
+          spent: 2000,
+        },
+      ],
+    }
+
+    // Count calls to the budget-fetching endpoint (anything other than
+    // "/periods"): the first resolves immediately with fixture A, every
+    // subsequent one is left perpetually pending until manually resolved.
+    let budgetCallCount = 0
+    let resolveSecondBudget: (value: unknown) => void = () => {}
+    const secondBudgetPromise = new Promise((resolve) => {
+      resolveSecondBudget = resolve
+    })
+
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') return Promise.resolve([periodA, periodB])
+      budgetCallCount += 1
+      if (budgetCallCount === 1) return Promise.resolve(budgetDataA)
+      return secondBudgetPromise
+    })
+
+    const user = userEvent.setup()
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Продукты')
+
+    // Nav buttons are whatever's left after excluding the header button.
+    const navButtons = screen.getAllByRole('button').filter((b) => !/Новый бюджет/.test(b.textContent ?? ''))
+    expect(navButtons.length).toBeGreaterThanOrEqual(2)
+
+    // Click a nav arrow; tolerate either direction — fall back to the other
+    // button if the first click didn't trigger a second budget fetch.
+    await user.click(navButtons[0])
+    try {
+      await vi.waitFor(() => expect(budgetCallCount).toBeGreaterThanOrEqual(2), { timeout: 300 })
+    } catch {
+      await user.click(navButtons[1])
+      await vi.waitFor(() => expect(budgetCallCount).toBeGreaterThanOrEqual(2))
+    }
+
+    // The new period's budget fetch is still pending — the previous period's
+    // envelope table content must remain on screen, not be cleared to a
+    // loading/skeleton state.
+    expect(screen.getByText('Продукты')).toBeInTheDocument()
+    expect(screen.getByRole('table')).toBeInTheDocument()
+
+    await act(async () => {
+      resolveSecondBudget(budgetDataB)
+    })
+
+    await vi.waitFor(() => expect(screen.getByText('Транспорт')).toBeInTheDocument())
+    expect(screen.queryByText('Продукты')).not.toBeInTheDocument()
   })
 })

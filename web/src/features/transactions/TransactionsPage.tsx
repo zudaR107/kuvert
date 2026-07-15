@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Plus, CreditCard, Receipt, Trash2 } from 'lucide-react'
 import { EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, Amount, StatTile, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
@@ -76,6 +76,7 @@ export function TransactionsPage() {
   const { data: transactions = [], isLoading } = useQuery<Transaction[]>({
     queryKey: ['transactions', query],
     queryFn: () => api.get(`/transactions${query ? `?${query}` : ''}`),
+    placeholderData: keepPreviousData,
   })
 
   const accountById = new Map(accounts.map((a) => [a.id, a]))
