@@ -36,6 +36,29 @@ router.post('/', zValidator('json', accountSchema), async (c) => {
     createdAt: new Date(),
   }
   await db.insert(accounts).values(account)
+
+  // A non-zero starting balance is otherwise invisible to budgeting -
+  // toBeBudgeted only ever looks at the transactions table, never at
+  // initialBalance directly. Recording it as a real opening transaction
+  // makes the money immediately available to allocate, same as if the
+  // user had entered it by hand. initialBalance itself is left as given
+  // (still echoed back below) - see the /:id/balance formula, which no
+  // longer adds it separately now that it's also one of these rows.
+  if (data.initialBalance !== 0) {
+    await db.insert(transactions).values({
+      id: createId(),
+      userId: user.id,
+      accountId: account.id,
+      envelopeId: null,
+      toAccountId: null,
+      type: data.initialBalance > 0 ? 'income' : 'expense',
+      amount: Math.abs(data.initialBalance),
+      date: new Date().toISOString().slice(0, 10),
+      note: 'Начальный баланс',
+      createdAt: new Date(),
+    })
+  }
+
   return c.json(account, 201)
 })
 
@@ -76,7 +99,9 @@ router.delete('/:id', async (c) => {
   return c.json({ ok: true })
 })
 
-// Computed balance = initialBalance + sum of transactions
+// Computed balance = sum of transactions (a non-zero initialBalance is
+// itself recorded as an opening transaction at creation time - see
+// POST / above - so it's already included here, not added again).
 router.get('/:id/balance', async (c) => {
   const user = c.get('user')
   const { id } = c.req.param()
@@ -96,7 +121,7 @@ router.get('/:id/balance', async (c) => {
     return sum
   }, 0)
 
-  return c.json({ balance: account.initialBalance + txBalance })
+  return c.json({ balance: txBalance })
 })
 
 export { router as accountsRouter }

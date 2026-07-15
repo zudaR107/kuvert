@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within, act } from '@testing-library/react'
+import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BudgetPage } from '../features/budget/BudgetPage'
+import { formatMonthYear } from '../lib/format'
 
 // ---------------------------------------------------------------------------
 // Mock the api module
@@ -293,7 +294,7 @@ describe('BudgetPage create-period modal', () => {
     expect(dialog).toBeInTheDocument()
   })
 
-  it('the form has a required name textbox, required start/end date inputs, and a submit button', async () => {
+  it('the form has an optional name textbox (a placeholder covers it when blank), required start/end date inputs, and a submit button', async () => {
     vi.mocked(api.get).mockImplementation((path: string) => {
       if (path === '/periods') return Promise.resolve([mockPeriod])
       return Promise.resolve(mockBudgetData)
@@ -305,7 +306,7 @@ describe('BudgetPage create-period modal', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Новый бюджетный период' })
 
     const nameInput = within(dialog).getByRole('textbox')
-    expect(nameInput).toBeRequired()
+    expect(nameInput).not.toBeRequired()
 
     const dateInputs = dialog.querySelectorAll('input[type="date"]')
     expect(dateInputs.length).toBe(2)
@@ -364,6 +365,120 @@ describe('BudgetPage create-period modal', () => {
     await vi.waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Новый бюджетный период' })).not.toBeInTheDocument()
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// PeriodForm name field: dynamic placeholder derived from formatMonthYear(startDate)
+// ---------------------------------------------------------------------------
+describe('BudgetPage create-period modal name field placeholder', () => {
+  beforeEach(() => {
+    vi.mocked(api.post).mockReset()
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') return Promise.resolve([mockPeriod])
+      return Promise.resolve(mockBudgetData)
+    })
+  })
+
+  async function openModal(user: ReturnType<typeof userEvent.setup>) {
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Июль 2024')
+    await user.click(screen.getByRole('button', { name: 'Новый бюджет' }))
+    return screen.findByRole('dialog', { name: 'Новый бюджетный период' })
+  }
+
+  it('name input placeholder defaults to formatMonthYear of today (the form default start date)', async () => {
+    const user = userEvent.setup()
+    const dialog = await openModal(user)
+
+    const nameInput = within(dialog).getByRole('textbox') as HTMLInputElement
+    const expectedPlaceholder = formatMonthYear(new Date().toISOString().slice(0, 10))
+    expect(nameInput.placeholder).toBe(expectedPlaceholder)
+  })
+
+  it('name input placeholder updates live when the start-date field changes', async () => {
+    const user = userEvent.setup()
+    const dialog = await openModal(user)
+
+    const nameInput = within(dialog).getByRole('textbox') as HTMLInputElement
+    const dateInputs = Array.from(dialog.querySelectorAll('input[type="date"]')) as HTMLInputElement[]
+    const startInput = dateInputs[0]
+
+    fireEvent.change(startInput, { target: { value: '2026-03-15' } })
+
+    expect(nameInput.placeholder).toBe('Март 2026')
+  })
+
+  it('submitting with a blank name posts the computed placeholder (formatMonthYear of startDate) as the name', async () => {
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-period' })
+    const user = userEvent.setup()
+    const dialog = await openModal(user)
+
+    const dateInputs = Array.from(dialog.querySelectorAll('input[type="date"]')) as HTMLInputElement[]
+    const startInput = dateInputs[0]
+    const endInput = dateInputs[1]
+
+    fireEvent.change(startInput, { target: { value: '2026-03-15' } })
+    fireEvent.change(endInput, { target: { value: '2026-03-31' } })
+
+    // Name field left blank
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(api.post).toHaveBeenCalledTimes(1)
+    const [path, body] = vi.mocked(api.post).mock.calls[0]
+    expect(path).toBe('/periods')
+    const b = body as Record<string, unknown>
+    expect(b.name).toBe('Март 2026')
+    expect(b.name).not.toBe('')
+  })
+
+  it('submitting with only whitespace in the name field also falls back to the computed placeholder', async () => {
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-period' })
+    const user = userEvent.setup()
+    const dialog = await openModal(user)
+
+    const dateInputs = Array.from(dialog.querySelectorAll('input[type="date"]')) as HTMLInputElement[]
+    const startInput = dateInputs[0]
+    const endInput = dateInputs[1]
+
+    fireEvent.change(startInput, { target: { value: '2026-03-15' } })
+    fireEvent.change(endInput, { target: { value: '2026-03-31' } })
+
+    const nameInput = within(dialog).getByRole('textbox')
+    await user.type(nameInput, '   ')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(api.post).toHaveBeenCalledTimes(1)
+    const [, body] = vi.mocked(api.post).mock.calls[0]
+    const b = body as Record<string, unknown>
+    expect(b.name).toBe('Март 2026')
+  })
+
+  it('submitting with an explicit name uses the typed value as-is, not the placeholder', async () => {
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-period' })
+    const user = userEvent.setup()
+    const dialog = await openModal(user)
+
+    const dateInputs = Array.from(dialog.querySelectorAll('input[type="date"]')) as HTMLInputElement[]
+    const startInput = dateInputs[0]
+    const endInput = dateInputs[1]
+
+    fireEvent.change(startInput, { target: { value: '2026-03-15' } })
+    fireEvent.change(endInput, { target: { value: '2026-03-31' } })
+
+    const nameInput = within(dialog).getByRole('textbox')
+    await user.type(nameInput, 'Мой личный бюджет')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(api.post).toHaveBeenCalledTimes(1)
+    const [, body] = vi.mocked(api.post).mock.calls[0]
+    const b = body as Record<string, unknown>
+    expect(b.name).toBe('Мой личный бюджет')
   })
 })
 

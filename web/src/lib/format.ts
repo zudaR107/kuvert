@@ -26,3 +26,15 @@ export function formatDate(iso: string): string {
 export function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
+
+// "2026-07-01" -> "Июль 2026" - used to suggest a budget period name from
+// its start date, so the user isn't forced to type out the month by hand.
+// ru-RU's long month+year format includes a trailing "г." ("года") - e.g.
+// "июль 2026 г." - which reads fine in a full sentence but not as a
+// standalone period name, so it's stripped here.
+export function formatMonthYear(iso: string): string {
+  const formatted = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' })
+    .format(new Date(iso))
+    .replace(/\s*г\.?$/i, '')
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1)
+}

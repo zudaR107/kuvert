@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { ChevronLeft, ChevronRight, ClipboardList, Plus, Wallet } from 'lucide-react'
 import { EmptyState, ICON_SIZE, Button, Amount, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
-import { formatAmount, fromMinorUnits, toMinorUnits, today } from '../../lib/format'
+import { formatAmount, formatMonthYear, fromMinorUnits, toMinorUnits, today } from '../../lib/format'
 import { useToast } from '../../hooks/useToast'
 
 const PERIOD_FORM_ID = 'period-form'
@@ -209,6 +209,7 @@ function PeriodForm({ formId, onSubmit }: {
   onSubmit: (values: PeriodFormValues) => void
 }) {
   const [values, setValues] = useState<PeriodFormValues>(defaultPeriodForm)
+  const suggestedName = formatMonthYear(values.startDate)
 
   function set<K extends keyof PeriodFormValues>(key: K, value: PeriodFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }))
@@ -217,7 +218,10 @@ function PeriodForm({ formId, onSubmit }: {
   return (
     <form
       id={formId}
-      onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
+      onSubmit={(e) => {
+        e.preventDefault()
+        onSubmit({ ...values, name: values.name.trim() || suggestedName })
+      }}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -225,8 +229,7 @@ function PeriodForm({ formId, onSubmit }: {
         label="Название"
         value={values.name}
         onChange={(e) => set('name', e.target.value)}
-        placeholder="Июль 2026"
-        required
+        placeholder={suggestedName}
       />
 
       <div style={{ display: 'flex', gap: '0.75rem' }}>
