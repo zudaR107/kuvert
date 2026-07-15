@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, ClipboardList, Plus, Wallet } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ClipboardList, Plus, Trash2, Wallet } from 'lucide-react'
 import { EmptyState, ICON_SIZE, Button, Amount, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatMonthYear, fromMinorUnits, toMinorUnits, today } from '../../lib/format'
@@ -72,6 +72,26 @@ export function BudgetPage() {
     onError: () => toast.showError('Не удалось создать бюджетный период'),
   })
 
+  const deletePeriodMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/periods/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['periods'] })
+      setPeriodIndex((i) => Math.max(0, i - 1))
+      toast.showSuccess('Бюджетный период удалён')
+    },
+    onError: () => toast.showError('Не удалось удалить бюджетный период'),
+  })
+
+  function handleDeletePeriod() {
+    if (!currentPeriod) return
+    // No undo on the backend (a hard delete), and no rename/edit route
+    // either - this is the only way to fix a mistaken period, so a plain
+    // confirm() is worth the interruption here.
+    if (window.confirm(`Удалить бюджетный период «${currentPeriod.name}»? Это действие необратимо.`)) {
+      deletePeriodMutation.mutate(currentPeriod.id)
+    }
+  }
+
   const periodModal = (
     <Modal
       open={modalOpen}
@@ -139,6 +159,15 @@ export function BudgetPage() {
             disabled={periodIndex === 0}
           >
             <ChevronRight size={18} />
+          </Button>
+          <Button
+            variant="ghost"
+            style={{ padding: '0.375rem', border: 'none' }}
+            onClick={handleDeletePeriod}
+            disabled={!currentPeriod || deletePeriodMutation.isPending}
+            aria-label="Удалить бюджетный период"
+          >
+            <Trash2 size={16} />
           </Button>
         </div>
         <Button
