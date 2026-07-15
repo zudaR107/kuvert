@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
-import { readFileSync } from 'fs'
+import { readdirSync, readFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import * as schema from '../../db/schema.js'
@@ -10,14 +10,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 export const sqlite = new Database(':memory:')
 sqlite.pragma('foreign_keys = ON')
 
-// Run migration from the single SQL file
-const migrationSql = readFileSync(
-  resolve(__dirname, '../../db/migrations/0000_smart_anita_blake.sql'),
-  'utf-8',
-)
-for (const stmt of migrationSql.split('--> statement-breakpoint')) {
-  const s = stmt.trim()
-  if (s) sqlite.exec(s)
+// Run every migration file in order (not just the first one) - the
+// numeric filename prefix drizzle-kit generates already sorts correctly.
+// A single hardcoded file here used to mean any migration added after the
+// first was silently never exercised by the test suite at all.
+const migrationsDir = resolve(__dirname, '../../db/migrations')
+const migrationFiles = readdirSync(migrationsDir)
+  .filter((f) => f.endsWith('.sql'))
+  .sort()
+for (const file of migrationFiles) {
+  const migrationSql = readFileSync(resolve(migrationsDir, file), 'utf-8')
+  for (const stmt of migrationSql.split('--> statement-breakpoint')) {
+    const s = stmt.trim()
+    if (s) sqlite.exec(s)
+  }
 }
 
 // Insert the two test users — they persist for the lifetime of this DB instance.
