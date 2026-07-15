@@ -84,12 +84,10 @@ export function BudgetPage() {
 
   function handleDeletePeriod() {
     if (!currentPeriod) return
-    // No undo on the backend (a hard delete), and no rename/edit route
-    // either - this is the only way to fix a mistaken period, so a plain
-    // confirm() is worth the interruption here.
-    if (window.confirm(`Удалить бюджетный период «${currentPeriod.name}»? Это действие необратимо.`)) {
-      deletePeriodMutation.mutate(currentPeriod.id)
-    }
+    // No confirm() dialog - matches every other destructive action in
+    // the app (Accounts/Envelopes archive, Debts/Goals delete), none of
+    // which interrupt with a browser-native confirmation either.
+    deletePeriodMutation.mutate(currentPeriod.id)
   }
 
   const periodModal = (
