@@ -1,0 +1,3 @@
+[submodule "schloss-ui"]
+	path = schloss-ui
+	url = https://github.com/zudaR107/schloss-ui.git
