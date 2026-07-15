@@ -41,6 +41,8 @@ interface AccountFormValues {
   color: string
 }
 
+const ACCOUNT_NAME_PLACEHOLDER = 'Основная карта'
+
 const DEFAULT_FORM: AccountFormValues = {
   name: '', type: 'checking', currency: 'RUB', initialBalance: '0', color: '#3b82f6',
 }
@@ -254,7 +256,10 @@ function AccountForm({ formId, initial, onSubmit }: {
   return (
     <form
       id={formId}
-      onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
+      onSubmit={(e) => {
+        e.preventDefault()
+        onSubmit({ ...values, name: values.name.trim() || ACCOUNT_NAME_PLACEHOLDER })
+      }}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -262,8 +267,7 @@ function AccountForm({ formId, initial, onSubmit }: {
         label="Название"
         value={values.name}
         onChange={(e) => set('name', e.target.value)}
-        placeholder="Основная карта"
-        required
+        placeholder={ACCOUNT_NAME_PLACEHOLDER}
       />
 
       <Field

@@ -34,6 +34,8 @@ const DEFAULT_FORM: DebtFormValues = {
   counterparty: '', type: 'owed', amount: '', currency: 'RUB', dueDate: '', note: '',
 }
 
+const DEBT_COUNTERPARTY_PLACEHOLDER = 'Имя человека'
+
 export function DebtsPage() {
   const qc = useQueryClient()
   const toast = useToast()
@@ -274,7 +276,10 @@ function DebtForm({ formId, initial, onSubmit }: {
   return (
     <form
       id={formId}
-      onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
+      onSubmit={(e) => {
+        e.preventDefault()
+        onSubmit({ ...values, counterparty: values.counterparty.trim() || DEBT_COUNTERPARTY_PLACEHOLDER })
+      }}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -282,8 +287,7 @@ function DebtForm({ formId, initial, onSubmit }: {
         label="Контрагент"
         value={values.counterparty}
         onChange={(e) => set('counterparty', e.target.value)}
-        placeholder="Имя человека"
-        required
+        placeholder={DEBT_COUNTERPARTY_PLACEHOLDER}
       />
 
       <Field

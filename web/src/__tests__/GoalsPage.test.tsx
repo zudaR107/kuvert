@@ -252,7 +252,7 @@ describe('GoalsPage create-goal modal', () => {
     expect(dialog).toBeInTheDocument()
   })
 
-  it('the form has a required name textbox, a required target-amount input, an optional deadline date input, a recurring checkbox, and a submit button', async () => {
+  it('the form has an optional name textbox (a placeholder covers it when blank), a required target-amount input, an optional deadline date input, a recurring checkbox, and a submit button', async () => {
     mockApiForGoals([activeGoal])
     const user = userEvent.setup()
     render(<GoalsPage />, { wrapper: createWrapper() })
@@ -261,8 +261,8 @@ describe('GoalsPage create-goal modal', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
 
     const textboxes = within(dialog).getAllByRole('textbox')
-    const requiredTextbox = textboxes.find((t) => t.hasAttribute('required'))
-    expect(requiredTextbox).toBeDefined()
+    expect(textboxes.length).toBeGreaterThanOrEqual(1)
+    textboxes.forEach((t) => expect(t).not.toBeRequired())
 
     const spinbuttons = within(dialog).getAllByRole('spinbutton')
     const requiredSpin = spinbuttons.find((s) => s.hasAttribute('required'))

@@ -35,6 +35,8 @@ const DEFAULT_GOAL_FORM: GoalFormValues = {
   name: '', targetAmount: '', deadline: '', recurring: false, recurringDay: '1',
 }
 
+const GOAL_NAME_PLACEHOLDER = 'Отпуск, подушка безопасности…'
+
 interface ContributionFormValues {
   accountId: string
   amount: string
@@ -267,7 +269,10 @@ function GoalForm({ formId, onSubmit }: {
   return (
     <form
       id={formId}
-      onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
+      onSubmit={(e) => {
+        e.preventDefault()
+        onSubmit({ ...values, name: values.name.trim() || GOAL_NAME_PLACEHOLDER })
+      }}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -275,8 +280,7 @@ function GoalForm({ formId, onSubmit }: {
         label="Название"
         value={values.name}
         onChange={(e) => set('name', e.target.value)}
-        placeholder="Отпуск, подушка безопасности…"
-        required
+        placeholder={GOAL_NAME_PLACEHOLDER}
       />
 
       <Field

@@ -116,12 +116,11 @@ async function switchToSettledFilter(
   return { settledIndex: 1, activeIndex: 0 }
 }
 
-// Finds the required text input inside a dialog (the counterparty field is
-// the only textbox specified as required by the spec).
-function findRequiredTextbox(dialog: HTMLElement): HTMLElement {
-  const textboxes = within(dialog).getAllByRole('textbox')
-  const required = textboxes.find((t) => t.hasAttribute('required'))
-  return required ?? textboxes[0]
+// Finds the counterparty text input inside a dialog by id - it's no longer
+// the only required textbox in the form (debt-currency still is), so a
+// "find the required one" heuristic can no longer tell them apart.
+function findCounterpartyInput(dialog: HTMLElement): HTMLElement {
+  return dialog.querySelector('#debt-counterparty') as HTMLElement
 }
 
 // Finds the required numeric input inside a dialog (the amount field).
@@ -370,14 +369,14 @@ describe('DebtsPage create flow', () => {
     expect(dialog).toBeInTheDocument()
   })
 
-  it('the create form has a required counterparty input, a type select offering owed/owing, a required amount input, a currency input defaulting to RUB, and a submit button', async () => {
+  it('the create form has an optional counterparty input (a placeholder covers it when blank), a type select offering owed/owing, a required amount input, a currency input defaulting to RUB, and a submit button', async () => {
     const user = userEvent.setup()
     render(<DebtsPage />, { wrapper: createWrapper() })
     await user.click(await screen.findByRole('button', { name: 'Новый долг' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новый долг' })
 
-    const nameInput = findRequiredTextbox(dialog)
-    expect(nameInput).toBeRequired()
+    const nameInput = findCounterpartyInput(dialog)
+    expect(nameInput).not.toBeRequired()
 
     const select = within(dialog).getByRole('combobox') as HTMLSelectElement
     const values = Array.from(select.options).map((o) => o.value)
@@ -410,7 +409,7 @@ describe('DebtsPage create flow', () => {
     await user.click(await screen.findByRole('button', { name: 'Новый долг' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новый долг' })
 
-    const nameInput = findRequiredTextbox(dialog)
+    const nameInput = findCounterpartyInput(dialog)
     await user.type(nameInput, 'Иван Петров')
 
     const select = within(dialog).getByRole('combobox') as HTMLSelectElement
@@ -440,7 +439,7 @@ describe('DebtsPage create flow', () => {
     await user.click(await screen.findByRole('button', { name: 'Новый долг' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новый долг' })
 
-    const nameInput = findRequiredTextbox(dialog)
+    const nameInput = findCounterpartyInput(dialog)
     await user.type(nameInput, 'Иван Петров')
     const amountInput = findRequiredSpinbutton(dialog)
     await user.clear(amountInput)
