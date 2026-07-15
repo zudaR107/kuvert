@@ -17,6 +17,16 @@ COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml .npmrc ./
 COPY web/package.json ./web/
 COPY api/package.json ./api/
 
+# --filter web doesn't spare this image from better-sqlite3 (the API
+# workspace's native dependency) - pnpm's frozen-lockfile install still
+# verifies/builds every package in the shared workspace lockfile. Its
+# install script downloads a prebuilt binary and only falls back to
+# compiling from source (needs Python + a C/C++ toolchain, absent from
+# node:22-alpine by default) if that download fails - a transient
+# network hiccup then hard-fails the whole build instead of just being
+# slower. Installed unconditionally so the rare fallback path works.
+RUN apk add --no-cache python3 make g++
+
 # @zudar107/schloss-ui is on GitHub Packages, not npmjs.com - even
 # though the package is public, installing it still requires auth.
 # The token is passed as a BuildKit secret (not an ARG, so it never
