@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest'
 import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -557,5 +557,110 @@ describe('BudgetPage keeps previous period visible while navigating', () => {
 
     await vi.waitFor(() => expect(screen.getByText('Транспорт')).toBeInTheDocument())
     expect(screen.queryByText('Продукты')).not.toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Delete-period flow (new behaviour)
+// ---------------------------------------------------------------------------
+describe('BudgetPage delete-period flow', () => {
+  let confirmSpy: MockInstance<(message?: string) => boolean> | undefined
+
+  beforeEach(() => {
+    vi.mocked(api.delete).mockReset()
+  })
+
+  afterEach(() => {
+    confirmSpy?.mockRestore()
+    confirmSpy = undefined
+  })
+
+  it('renders a button with an aria-label containing "Удалить" next to period navigation when a period exists', async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') return Promise.resolve([mockPeriod])
+      return Promise.resolve(mockBudgetData)
+    })
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Июль 2024')
+
+    expect(screen.getByRole('button', { name: /Удалить/ })).toBeInTheDocument()
+  })
+
+  it('does not render a delete button when there is no current period', async () => {
+    vi.mocked(api.get).mockResolvedValue([])
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Бюджет не создан')
+
+    expect(screen.queryByRole('button', { name: /Удалить/ })).not.toBeInTheDocument()
+  })
+
+  it('clicking the delete button asks for confirmation via window.confirm', async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') return Promise.resolve([mockPeriod])
+      return Promise.resolve(mockBudgetData)
+    })
+    confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const user = userEvent.setup()
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Июль 2024')
+
+    await user.click(screen.getByRole('button', { name: /Удалить/ }))
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not call DELETE when window.confirm returns false', async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') return Promise.resolve([mockPeriod])
+      return Promise.resolve(mockBudgetData)
+    })
+    confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const user = userEvent.setup()
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Июль 2024')
+
+    await user.click(screen.getByRole('button', { name: /Удалить/ }))
+
+    expect(api.delete).not.toHaveBeenCalled()
+  })
+
+  it('calls DELETE /periods/{id} for the current period when window.confirm returns true', async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') return Promise.resolve([mockPeriod])
+      return Promise.resolve(mockBudgetData)
+    })
+    vi.mocked(api.delete).mockResolvedValue({})
+    confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const user = userEvent.setup()
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Июль 2024')
+
+    await user.click(screen.getByRole('button', { name: /Удалить/ }))
+
+    await vi.waitFor(() => {
+      expect(api.delete).toHaveBeenCalledWith('/periods/period-1')
+    })
+  })
+
+  it('refetches the periods list after a successful delete', async () => {
+    let periodsCallCount = 0
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') {
+        periodsCallCount += 1
+        return Promise.resolve(periodsCallCount === 1 ? [mockPeriod] : [])
+      }
+      return Promise.resolve(mockBudgetData)
+    })
+    vi.mocked(api.delete).mockResolvedValue({})
+    confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const user = userEvent.setup()
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByText('Июль 2024')
+
+    await user.click(screen.getByRole('button', { name: /Удалить/ }))
+
+    await vi.waitFor(() => {
+      expect(periodsCallCount).toBeGreaterThanOrEqual(2)
+    })
   })
 })

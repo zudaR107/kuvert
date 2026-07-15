@@ -2,6 +2,7 @@ import { createRouter, createRootRouteWithContext, createRoute, Outlet, redirect
 import type { QueryClient } from '@tanstack/react-query'
 import { Layout } from '../components/Layout'
 import { BudgetPage } from '../features/budget/BudgetPage'
+import { EnvelopesPage } from '../features/envelopes/EnvelopesPage'
 import { GoalsPage } from '../features/goals/GoalsPage'
 import { AccountsPage } from '../features/accounts/AccountsPage'
 import { DebtsPage } from '../features/debts/DebtsPage'
@@ -82,6 +83,16 @@ const budgetRoute = createRoute({
   component: BudgetPage,
 })
 
+const envelopesRoute = createRoute({
+  getParentRoute: () => protectedLayout,
+  path: '/envelopes',
+  loader: prefetch((qc) => Promise.all([
+    qc.ensureQueryData({ queryKey: ['envelopes'], queryFn: () => api.get('/envelopes') }),
+    qc.ensureQueryData({ queryKey: ['envelopeCategories'], queryFn: () => api.get('/envelopes/categories') }),
+  ])),
+  component: EnvelopesPage,
+})
+
 const transactionsRoute = createRoute({
   getParentRoute: () => protectedLayout,
   path: '/transactions',
@@ -140,6 +151,7 @@ const routeTree = rootRoute.addChildren([
   protectedLayout.addChildren([
     indexRoute,
     budgetRoute,
+    envelopesRoute,
     transactionsRoute,
     goalsRoute,
     debtsRoute,

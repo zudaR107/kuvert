@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
-  LayoutDashboard, Receipt, Target, CreditCard, Wallet, Settings,
+  LayoutDashboard, Mail, Receipt, Target, CreditCard, Wallet, Settings,
   LogOut, Sun, Moon, Monitor, Coffee, X
 } from 'lucide-react'
 import { Toast } from '@zudar107/schloss-ui'
@@ -31,6 +31,7 @@ function getStoredSidebarWidth(): number {
 
 const NAV_ITEMS = [
   { to: '/budget',       icon: <LayoutDashboard size={18} />, label: 'Бюджет' },
+  { to: '/envelopes',    icon: <Mail size={18} />,            label: 'Конверты' },
   { to: '/transactions', icon: <Receipt size={18} />,         label: 'Транзакции' },
   { to: '/goals',        icon: <Target size={18} />,          label: 'Цели' },
   { to: '/debts',        icon: <CreditCard size={18} />,      label: 'Долги' },
