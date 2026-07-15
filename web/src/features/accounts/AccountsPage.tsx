@@ -62,6 +62,13 @@ export function AccountsPage() {
     mutationFn: (values: AccountFormValues) => api.post('/accounts', toPayload(values)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounts'] })
+      // A non-zero initial balance also creates a real transaction
+      // server-side (see api/src/features/accounts/router.ts) - without
+      // this, an already-cached Transactions page (or the Budget page's
+      // toBeBudgeted, which depends on income transactions) keeps
+      // showing stale data until a hard reload.
+      qc.invalidateQueries({ queryKey: ['transactions'] })
+      qc.invalidateQueries({ queryKey: ['budget'] })
       closeModal()
       toast.showSuccess('Счёт создан')
     },
@@ -70,7 +77,8 @@ export function AccountsPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, values }: { id: string; values: AccountFormValues }) =>
-      api.put(`/accounts/${id}`, toPayload(values)),
+      // initialBalance is deliberately left out here - see toUpdatePayload.
+      api.put(`/accounts/${id}`, toUpdatePayload(values)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounts'] })
       closeModal()
@@ -107,6 +115,8 @@ export function AccountsPage() {
     if (editing) updateMutation.mutate({ id: editing.id, values })
     else createMutation.mutate(values)
   }
+
+  const isEditing = editing !== null
 
   return (
     <div style={{ maxWidth: 860, margin: '0 auto' }}>
@@ -161,6 +171,7 @@ export function AccountsPage() {
       >
         <AccountForm
           formId={ACCOUNT_FORM_ID}
+          isEditing={isEditing}
           initial={editing ? {
             name: editing.name,
             type: editing.type,
@@ -192,6 +203,17 @@ function toPayload(values: AccountFormValues) {
     initialBalance: toMinorUnits(parseFloat(values.initialBalance) || 0),
     color: values.color,
   }
+}
+
+// initialBalance only has a real, one-time effect at creation (it becomes
+// an opening transaction there - see api/src/features/accounts/router.ts).
+// PUT /accounts/:id never touches transactions, so sending it here would
+// silently rewrite a column nothing else reads without changing the
+// actual (transaction-derived) balance at all - omitted entirely instead
+// of resending a value the edit form no longer even shows.
+function toUpdatePayload(values: AccountFormValues) {
+  const { name, type, currency, color } = toPayload(values)
+  return { name, type, currency, color }
 }
 
 function AccountCard({ account, onEdit, onArchive }: { account: Account; onEdit: () => void; onArchive: () => void }) {
@@ -242,9 +264,10 @@ function AccountCard({ account, onEdit, onArchive }: { account: Account; onEdit:
   )
 }
 
-function AccountForm({ formId, initial, onSubmit }: {
+function AccountForm({ formId, initial, isEditing, onSubmit }: {
   formId: string
   initial: AccountFormValues
+  isEditing: boolean
   onSubmit: (values: AccountFormValues) => void
 }) {
   const [values, setValues] = useState(initial)
@@ -293,17 +316,19 @@ function AccountForm({ formId, initial, onSubmit }: {
             required
           />
         </div>
-        <div style={{ flex: 1 }}>
-          <Field
-            id="account-balance"
-            label="Начальный баланс"
-            type="number"
-            step="0.01"
-            prefix="₽"
-            value={values.initialBalance}
-            onChange={(e) => set('initialBalance', e.target.value)}
-          />
-        </div>
+        {!isEditing && (
+          <div style={{ flex: 1 }}>
+            <Field
+              id="account-balance"
+              label="Начальный баланс"
+              type="number"
+              step="0.01"
+              prefix="₽"
+              value={values.initialBalance}
+              onChange={(e) => set('initialBalance', e.target.value)}
+            />
+          </div>
+        )}
       </div>
 
       <Field

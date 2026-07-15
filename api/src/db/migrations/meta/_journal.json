@@ -8,6 +8,13 @@
       "when": 1783345218096,
       "tag": "0000_smart_anita_blake",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784125800799,
+      "tag": "0001_backfill_initial_balance_transactions",
+      "breakpoints": true
     }
   ]
 }

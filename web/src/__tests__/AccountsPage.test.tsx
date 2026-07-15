@@ -50,6 +50,26 @@ function createWrapper() {
   )
 }
 
+// Same as createWrapper(), but also hands back the QueryClient instance so a
+// test can seed/inspect the cache directly (e.g. to observe cross-query
+// invalidation effects without rendering the other pages that own those
+// queries). Deliberately does NOT use gcTime: 0 (unlike createWrapper()) —
+// queries seeded here have no active observer in these tests, and gcTime: 0
+// garbage-collects unobserved queries almost immediately, before a test
+// could ever inspect their cache state.
+function createWrapperWithClient() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  )
+  return { wrapper, queryClient }
+}
+
 // ---------------------------------------------------------------------------
 // Default api.get implementation: routes /accounts and /accounts/{id}/balance
 // ---------------------------------------------------------------------------
@@ -368,6 +388,127 @@ describe('AccountsPage create flow', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Create flow — cross-query cache invalidation
+// ---------------------------------------------------------------------------
+// Creating an account with a non-zero starting balance also creates a real
+// transaction server-side, so a successful create must invalidate not only
+// ['accounts'] but also ['transactions', ...] and ['budget', ...] — otherwise
+// a separately-cached Transactions page, or the Budget page's "Осталось
+// распределить" figure (which depends on income transactions), would keep
+// showing stale data. These tests observe that directly on the QueryClient
+// cache rather than rendering TransactionsPage/BudgetPage.
+describe('AccountsPage create flow — cross-query cache invalidation', () => {
+  beforeEach(() => {
+    mockApiWithAccounts([])
+  })
+
+  it('refetches the accounts list (GET /accounts) after a successful create', async () => {
+    // Same call-count-as-proxy-for-invalidation approach used by
+    // BudgetPage.test.tsx's "refetches the periods list after a successful
+    // delete" test. ['accounts'] is actively observed by AccountsPage
+    // itself, so invalidateQueries triggers an immediate automatic refetch
+    // for it — by the time a POST resolves, isInvalidated has typically
+    // already flipped back to false, so a raw cache-state check isn't a
+    // reliable signal here (unlike the inactive ['transactions']/['budget']
+    // queries below). Counting GET /accounts calls avoids that race.
+    let accountsCallCount = 0
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/accounts') {
+        accountsCallCount += 1
+        return Promise.resolve([])
+      }
+      const balanceMatch = path.match(/^\/accounts\/(.+)\/balance$/)
+      if (balanceMatch) return Promise.resolve({ balance: 0 })
+      return Promise.reject(new Error(`Unexpected GET ${path}`))
+    })
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-acc' })
+    const user = userEvent.setup()
+
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await user.click(await screen.findByRole('button', { name: 'Новый счёт' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый счёт' })
+
+    const nameInput = within(dialog).getAllByRole('textbox')[0]
+    await user.type(nameInput, 'Копилка')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    await vi.waitFor(() => {
+      expect(accountsCallCount).toBeGreaterThanOrEqual(2)
+    })
+  })
+
+  it('invalidates cached ["transactions", ...] and ["budget", ...] queries after a successful create, without rendering TransactionsPage/BudgetPage', async () => {
+    // ['transactions', ...] and ['budget', ...] have no active observer in
+    // this test (TransactionsPage/BudgetPage are never rendered), so
+    // invalidateQueries only marks them stale — it won't auto-refetch them
+    // (default refetchType is 'active'), so isInvalidated stays true and is
+    // a reliable signal here.
+    //
+    // A plain createWrapper() client uses gcTime: 0 for fast test teardown,
+    // which garbage-collects unobserved queries almost immediately — before
+    // this test could ever observe them. So this test builds its own
+    // QueryClient with a normal (non-zero) gcTime via createWrapperWithClient.
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-acc' })
+    const user = userEvent.setup()
+    const { wrapper, queryClient } = createWrapperWithClient()
+
+    // Seed the cache as if TransactionsPage / BudgetPage had already fetched
+    // and cached data under these keys.
+    queryClient.setQueryData(['transactions', ''], [])
+    queryClient.setQueryData(['budget', 'period-1'], {})
+
+    render(<AccountsPage />, { wrapper })
+    await user.click(await screen.findByRole('button', { name: 'Новый счёт' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый счёт' })
+
+    const nameInput = within(dialog).getAllByRole('textbox')[0]
+    await user.type(nameInput, 'Копилка')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    await vi.waitFor(() => {
+      expect(api.post).toHaveBeenCalledTimes(1)
+    })
+
+    await vi.waitFor(() => {
+      expect(queryClient.getQueryState(['transactions', ''])?.isInvalidated).toBe(true)
+      expect(queryClient.getQueryState(['budget', 'period-1'])?.isInvalidated).toBe(true)
+    })
+  })
+
+  it('does not invalidate unrelated query keys after a successful create', async () => {
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-acc' })
+    const user = userEvent.setup()
+    const { wrapper, queryClient } = createWrapperWithClient()
+
+    queryClient.setQueryData(['envelopes'], [])
+    queryClient.setQueryData(['transactions', ''], [])
+
+    render(<AccountsPage />, { wrapper })
+    await user.click(await screen.findByRole('button', { name: 'Новый счёт' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый счёт' })
+
+    const nameInput = within(dialog).getAllByRole('textbox')[0]
+    await user.type(nameInput, 'Копилка')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    // Wait for the related invalidation to land first, as a synchronization
+    // point — ['envelopes'] shares no prefix with ['accounts'],
+    // ['transactions'] or ['budget'], so it should remain untouched
+    // throughout.
+    await vi.waitFor(() => {
+      expect(queryClient.getQueryState(['transactions', ''])?.isInvalidated).toBe(true)
+    })
+    expect(queryClient.getQueryState(['envelopes'])?.isInvalidated).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Edit flow
 // ---------------------------------------------------------------------------
 describe('AccountsPage edit flow', () => {
@@ -386,7 +527,11 @@ describe('AccountsPage edit flow', () => {
     expect(within(dialog).getByDisplayValue('Основной счёт')).toBeInTheDocument()
   })
 
-  it('submitting the edit form calls PUT /accounts/{id} with an integer initialBalance', async () => {
+  it('submitting the edit form calls PUT /accounts/{id} without an initialBalance field', async () => {
+    // initialBalance only has a real effect at creation time (it becomes
+    // an opening transaction there) - PUT never touches transactions, so
+    // it's omitted from the edit form/payload entirely rather than
+    // silently rewriting a column nothing reads back.
     vi.mocked(api.put).mockResolvedValue({})
     const user = userEvent.setup()
     render(<AccountsPage />, { wrapper: createWrapper() })
@@ -401,7 +546,18 @@ describe('AccountsPage edit flow', () => {
     expect(api.put).toHaveBeenCalledTimes(1)
     const [path, body] = vi.mocked(api.put).mock.calls[0]
     expect(path).toBe('/accounts/acc-1')
-    expect(Number.isInteger((body as Record<string, unknown>).initialBalance)).toBe(true)
+    expect((body as Record<string, unknown>).initialBalance).toBeUndefined()
+  })
+
+  it('does not render the "Начальный баланс" field in the edit form', async () => {
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Основной счёт')
+
+    await user.click(screen.getByRole('button', { name: 'Изменить' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Изменить счёт' })
+
+    expect(within(dialog).queryByText('Начальный баланс')).not.toBeInTheDocument()
   })
 
   it('reflects an edited name in the PUT body', async () => {
