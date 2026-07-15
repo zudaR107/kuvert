@@ -13,9 +13,10 @@ RUN npm install -g pnpm@11.7.0
 # there), so it must be set explicitly here.
 ENV CI=true
 
-COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
 COPY web/package.json ./web/
 COPY api/package.json ./api/
+COPY schloss-ui/package.json ./schloss-ui/
 
 # --filter web doesn't spare this image from better-sqlite3 (the API
 # workspace's native dependency) - pnpm's frozen-lockfile install still
@@ -27,16 +28,18 @@ COPY api/package.json ./api/
 # slower. Installed unconditionally so the rare fallback path works.
 RUN apk add --no-cache python3 make g++
 
-# @zudar107/schloss-ui is on GitHub Packages, not npmjs.com - even
-# though the package is public, installing it still requires auth.
-# The token is passed as a BuildKit secret (not an ARG, so it never
-# ends up baked into an image layer) and written to a user-level
-# .npmrc - pnpm refuses to expand env vars in the *project* .npmrc's
-# auth line (to stop a malicious committed .npmrc from exfiltrating a
-# token to an attacker registry), so it can't just go in ./.npmrc.
-RUN --mount=type=secret,id=npm_token \
-    echo "//npm.pkg.github.com/:_authToken=$(cat /run/secrets/npm_token)" >> /root/.npmrc \
-    && pnpm install --frozen-lockfile --filter web
+# schloss-ui also needs its OWN devDependencies (tsup etc.) installed,
+# not just enough for web to link against it - "--filter web" alone
+# only pulls in what web needs to use the already-built package, but
+# it's no longer pre-built by a separate publish step, so it has to be
+# built right here.
+RUN pnpm install --frozen-lockfile --filter web --filter @zudar107/schloss-ui
+
+# schloss-ui is a git submodule, linked via pnpm's workspace:* protocol -
+# still consumed as its built dist/ output (same as when it was a
+# registry package), so it needs building here before web imports it.
+COPY schloss-ui ./schloss-ui
+RUN pnpm --filter @zudar107/schloss-ui build
 
 # Vite bakes import.meta.env.VITE_* into the bundle at build time, so this
 # must be declared as an ARG to actually receive the value passed via
