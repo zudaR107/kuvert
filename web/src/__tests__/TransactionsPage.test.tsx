@@ -711,3 +711,67 @@ describe('TransactionsPage edit flow', () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// placeholderData: changing a filter keeps showing the previous list while
+// the new one is still loading, then swaps once it arrives.
+// ---------------------------------------------------------------------------
+describe('TransactionsPage keeps previous list visible while a filter is loading', () => {
+  it('still shows the previous filter results while the filtered fetch is in flight, then swaps once it resolves', async () => {
+    const txFiltered = {
+      id: 'tx-3',
+      type: 'income',
+      accountId: 'acc-1',
+      envelopeId: null,
+      amount: 300000,
+      date: '2024-07-10',
+      note: 'Зарплата',
+    }
+
+    // Count calls to the transactions-fetching endpoint: the first resolves
+    // immediately with fixture A, every subsequent one is left perpetually
+    // pending until manually resolved.
+    let txCallCount = 0
+    let resolveSecondTx: (value: unknown) => void = () => {}
+    const secondTxPromise = new Promise((resolve) => {
+      resolveSecondTx = resolve
+    })
+
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/accounts') return Promise.resolve([accountRub, accountSecond])
+      if (path === '/envelopes') return Promise.resolve([envelopeGroceries, envelopeTransport])
+      if (path.startsWith('/transactions')) {
+        txCallCount += 1
+        if (txCallCount === 1) return Promise.resolve([txExpense])
+        return secondTxPromise
+      }
+      return Promise.reject(new Error(`Unexpected GET ${path}`))
+    })
+
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper() })
+    await screen.findByText(txExpense.note)
+
+    let typeSelect: HTMLSelectElement | undefined
+    await waitFor(() => {
+      const combos = screen.getAllByRole('combobox') as HTMLSelectElement[]
+      typeSelect = findSelectByOptionValues(combos, ['income', 'expense', 'transfer'])
+      expect(typeSelect).toBeTruthy()
+    })
+
+    await user.selectOptions(typeSelect as HTMLSelectElement, 'income')
+
+    await waitFor(() => expect(txCallCount).toBeGreaterThanOrEqual(2))
+
+    // The filtered fetch is still pending — the previously loaded
+    // (unfiltered) results must remain on screen, not be cleared to an
+    // empty/loading state.
+    expect(screen.getByText(txExpense.note)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Удалить транзакцию' })).toBeInTheDocument()
+
+    resolveSecondTx([txFiltered])
+
+    await waitFor(() => expect(screen.getByText('Зарплата')).toBeInTheDocument())
+    expect(screen.queryByText(txExpense.note)).not.toBeInTheDocument()
+  })
+})

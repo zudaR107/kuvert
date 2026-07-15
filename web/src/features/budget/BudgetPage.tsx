@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, ClipboardList, Plus, Wallet } from 'lucide-react'
 import { EmptyState, ICON_SIZE, Button, Amount, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
@@ -51,6 +51,7 @@ export function BudgetPage() {
     queryKey: ['budget', currentPeriod?.id],
     queryFn: () => api.get(`/periods/${currentPeriod!.id}/budget`),
     enabled: !!currentPeriod,
+    placeholderData: keepPreviousData,
   })
 
   const allocateMutation = useMutation({

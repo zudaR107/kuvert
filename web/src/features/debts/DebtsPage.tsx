@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Plus, ArrowDownLeft, ArrowUpRight, Check, Handshake, Trash2 } from 'lucide-react'
 import { EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, SegmentedControl, Amount, StatTile, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
@@ -44,6 +44,7 @@ export function DebtsPage() {
   const { data: debts = [], isLoading } = useQuery<Debt[]>({
     queryKey: ['debts', settledFilter],
     queryFn: () => api.get(`/debts?settled=${settledFilter}`),
+    placeholderData: keepPreviousData,
   })
 
   const createMutation = useMutation({
