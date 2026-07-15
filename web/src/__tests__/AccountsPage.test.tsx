@@ -251,7 +251,7 @@ describe('AccountsPage create flow', () => {
     expect(dialog).toBeInTheDocument()
   })
 
-  it('the create form has a required name input, a type select, a currency input, an initial balance input, and a submit button', async () => {
+  it('the create form has an optional name input (a placeholder covers it when blank), a type select, a currency input, an initial balance input, and a submit button', async () => {
     const user = userEvent.setup()
     render(<AccountsPage />, { wrapper: createWrapper() })
     await user.click(await screen.findByRole('button', { name: 'Новый счёт' }))
