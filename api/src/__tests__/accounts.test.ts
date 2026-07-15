@@ -98,6 +98,36 @@ describe('POST /accounts', () => {
     const res = await post('/accounts', { type: 'checking' })
     expect(res.status).toBe(400)
   })
+
+  it('creates a matching income transaction for a positive initialBalance', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const acct = await (await post('/accounts', { name: 'Positive', initialBalance: 8000000 })).json() as any
+    const list = await (await get(`/transactions?accountId=${acct.id}`)).json() as any[]
+    expect(list).toHaveLength(1)
+    expect(list[0]!.type).toBe('income')
+    expect(list[0]!.amount).toBe(8000000)
+    expect(list[0]!.accountId).toBe(acct.id)
+    expect(list[0]!.date).toBe(today)
+  })
+
+  it('creates a matching expense transaction for a negative initialBalance', async () => {
+    const acct = await (await post('/accounts', { name: 'Negative', initialBalance: -5000 })).json() as any
+    const list = await (await get(`/transactions?accountId=${acct.id}`)).json() as any[]
+    expect(list).toHaveLength(1)
+    expect(list[0]!.type).toBe('expense')
+    expect(list[0]!.amount).toBe(5000)
+    expect(list[0]!.accountId).toBe(acct.id)
+  })
+
+  it('creates no transaction when initialBalance is 0 or omitted', async () => {
+    const acctZero = await (await post('/accounts', { name: 'ZeroExplicit', initialBalance: 0 })).json() as any
+    const acctOmitted = await (await post('/accounts', { name: 'ZeroOmitted' })).json() as any
+
+    const listZero = await (await get(`/transactions?accountId=${acctZero.id}`)).json() as any[]
+    const listOmitted = await (await get(`/transactions?accountId=${acctOmitted.id}`)).json() as any[]
+    expect(listZero).toHaveLength(0)
+    expect(listOmitted).toHaveLength(0)
+  })
 })
 
 describe('GET /accounts/:id', () => {
@@ -207,5 +237,11 @@ describe('GET /accounts/:id/balance', () => {
   it('returns 404 for unknown account', async () => {
     const res = await get('/accounts/nonexistent/balance')
     expect(res.status).toBe(404)
+  })
+
+  it('does not double-count initialBalance now that it is represented as an opening transaction', async () => {
+    const acct = await (await post('/accounts', { name: 'NoDoubleCount', initialBalance: 12345 })).json() as any
+    const res = await get(`/accounts/${acct.id}/balance`)
+    expect((await res.json() as any).balance).toBe(12345)
   })
 })

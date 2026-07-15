@@ -183,6 +183,20 @@ describe('GET /periods/:id/budget', () => {
     // toBeBudgeted = 100000 - 20000 = 80000
     expect(body.toBeBudgeted).toBe(80000)
   })
+
+  it("includes an account's opening-balance transaction in toBeBudgeted for the period covering today", async () => {
+    // Period range deliberately spans "today" (system date), since account
+    // creation now stamps its opening transaction with today's date.
+    const period = await (await post('/periods', { name: 'Current', startDate: '2026-07-01', endDate: '2026-07-31' })).json() as any
+
+    // Positive initialBalance -> an income transaction dated today, which
+    // should now flow into toBeBudgeted just like any other income tx.
+    await post('/accounts', { name: 'New Account', initialBalance: 8000000 })
+
+    const body = await (await get(`/periods/${period.id}/budget`)).json() as any
+    // No envelopes/allocations set up -> toBeBudgeted = 8000000 - 0
+    expect(body.toBeBudgeted).toBe(8000000)
+  })
 })
 
 // ── PUT /periods/:id/budget/:envelopeId ────────────────────────────

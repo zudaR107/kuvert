@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatAmount, toMinorUnits, fromMinorUnits, formatDate, today } from '../lib/format'
+import { formatAmount, toMinorUnits, fromMinorUnits, formatDate, today, formatMonthYear } from '../lib/format'
 
 // ---------------------------------------------------------------------------
 // formatAmount
@@ -125,6 +125,28 @@ describe('formatDate', () => {
     expect(result).toContain('31')
     // ru-RU short month for December is "дек"
     expect(result).toMatch(/дек/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// formatMonthYear
+// ---------------------------------------------------------------------------
+describe('formatMonthYear', () => {
+  it('formats 2026-07-01 as "Июль 2026"', () => {
+    expect(formatMonthYear('2026-07-01')).toBe('Июль 2026')
+  })
+
+  it('formats 2026-01-15 as "Январь 2026"', () => {
+    expect(formatMonthYear('2026-01-15')).toBe('Январь 2026')
+  })
+
+  it('formats 2026-03-15 as "Март 2026"', () => {
+    expect(formatMonthYear('2026-03-15')).toBe('Март 2026')
+  })
+
+  it('capitalizes only the first letter (rest of the month name stays lowercase)', () => {
+    // "Сентябрь" — verifies we don't just uppercase the whole string
+    expect(formatMonthYear('2026-09-05')).toBe('Сентябрь 2026')
   })
 })
 
