@@ -55,14 +55,15 @@ export function useAuthProvider(): AuthState {
       .finally(() => setLoading(false))
   }, [])
 
-  // Does NOT call schlussel's /auth/logout here - that request would be
-  // proxied through kuvert's own origin, and the session cookie is
-  // host-only to schlussel's origin (no Domain attribute, by design), so
-  // it would never actually be sent and this call could never clear it.
-  // The real logout happens via a same-origin navigation to schlussel's
-  // own /logout page instead (see lib/authRedirect.ts) - this just clears
-  // kuvert's own local state before that navigation happens.
+  // Also clears kuvert's OWN session cookie: every proxied /auth/token or
+  // /auth/refresh call kuvert makes gets a Set-Cookie response that the
+  // browser scopes to kuvert.localhost (no Domain attribute, by design) -
+  // a second, fully independent cookie schlussel's own same-origin
+  // /logout page (see lib/authRedirect.ts, navigated to right after this)
+  // can never see or clear. This proxied /auth/logout call clears that
+  // one immediately instead of leaving it to expire on its own.
   async function logout() {
+    await schluesselFetch('/logout', { method: 'POST' }).catch(() => {})
     setAccessToken(null)
     setUser(null)
   }
