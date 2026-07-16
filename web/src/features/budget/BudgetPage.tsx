@@ -323,27 +323,44 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
       {/* Allocated (editable) */}
       <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
         {editing ? (
-          <input
-            autoFocus
-            type="text"
-            inputMode="decimal"
-            value={formatGroupedNumber(value)}
-            onChange={(e) => {
-              const cleaned = parseGroupedNumber(e.target.value)
-              if (/^-?\d*\.?\d*$/.test(cleaned)) setValue(cleaned)
-            }}
-            onFocus={(e) => { if (value === '0') e.target.select() }}
-            onBlur={() => {
-              setEditing(false)
-              const n = parseFloat(value)
-              if (!isNaN(n)) onAllocate(toMinorUnits(n))
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') e.currentTarget.blur()
-              if (e.key === 'Escape') { setEditing(false); setValue(String(fromMinorUnits(row.allocated))) }
-            }}
-            style={{ width: 90, textAlign: 'right', padding: '0.25rem 0.375rem', border: '1px solid var(--accent)', borderRadius: 6, outline: 'none', fontSize: '0.875rem', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
-          />
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <span
+              style={{
+                position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)',
+                color: 'var(--text-muted)', fontSize: '0.875rem', pointerEvents: 'none',
+              }}
+            >
+              ₽
+            </span>
+            <input
+              autoFocus
+              type="text"
+              inputMode="decimal"
+              value={formatGroupedNumber(value)}
+              onChange={(e) => {
+                const cleaned = parseGroupedNumber(e.target.value)
+                if (/^-?\d*\.?\d*$/.test(cleaned)) setValue(cleaned)
+              }}
+              onFocus={(e) => { if (value === '0') e.target.select() }}
+              onBlur={() => {
+                setEditing(false)
+                const n = parseFloat(value)
+                if (!isNaN(n)) onAllocate(toMinorUnits(n))
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur()
+                if (e.key === 'Escape') { setEditing(false); setValue(String(fromMinorUnits(row.allocated))) }
+              }}
+              style={{
+                width: 112, textAlign: 'right', padding: '0.375rem 0.5rem 0.375rem 1.5rem',
+                border: '1px solid var(--accent)', borderRadius: 8, outline: 'none',
+                fontSize: '0.875rem', fontWeight: 500,
+                background: 'var(--bg-surface)', color: 'var(--text-primary)',
+                boxShadow: '0 0 0 3px var(--accent-muted)',
+                transition: 'border-color 150ms, box-shadow 150ms',
+              }}
+            />
+          </div>
         ) : (
           <button
             onClick={() => setEditing(true)}
