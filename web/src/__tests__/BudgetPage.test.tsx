@@ -688,6 +688,25 @@ describe('BudgetPage allocation affordance', () => {
     expect(input).toHaveAttribute('tabindex', '-1')
   })
 
+  it('the pill shrinks to its own content while idle instead of taking a wide fixed width', async () => {
+    const button = await getAllocatedButton()
+    // No explicit width on the wrapping container while not editing - it
+    // sizes to the (in-flow) button's own content, not the wider fixed
+    // box only actually needed once editing.
+    const container = button.parentElement as HTMLElement
+    expect(container.style.width).toBe('')
+  })
+
+  it('entering edit mode gives the container an explicit width for the input to fill', async () => {
+    const user = userEvent.setup()
+    const button = await getAllocatedButton()
+    const container = button.parentElement as HTMLElement
+
+    await user.click(button)
+
+    expect(container.style.width).not.toBe('')
+  })
+
   it('pressing Escape while editing cancels without allocating, and the amount stays reachable again on the button', async () => {
     const user = userEvent.setup()
     const button = await getAllocatedButton()
