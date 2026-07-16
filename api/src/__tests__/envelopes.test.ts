@@ -135,6 +135,74 @@ describe('POST /envelopes', () => {
   })
 })
 
+// ── Archived envelopes & restore ──────────────────────────────────────
+describe('GET /envelopes?archived=true', () => {
+  it('returns only archived envelopes, disjoint from the default (unarchived) list', async () => {
+    const active = await (await post('/envelopes', { name: 'Active' })).json() as any
+    const toArchive = await (await post('/envelopes', { name: 'ToArchive' })).json() as any
+    await del(`/envelopes/${toArchive.id}`)
+
+    const archivedList = await (await get('/envelopes?archived=true')).json() as any[]
+    expect(archivedList).toHaveLength(1)
+    expect(archivedList[0]!.id).toBe(toArchive.id)
+    expect(archivedList[0]!.archived).toBe(true)
+
+    const activeList = await (await get('/envelopes')).json() as any[]
+    expect(activeList).toHaveLength(1)
+    expect(activeList[0]!.id).toBe(active.id)
+
+    const archivedIds = archivedList.map((e: any) => e.id)
+    const activeIds = activeList.map((e: any) => e.id)
+    expect(archivedIds.some((id: string) => activeIds.includes(id))).toBe(false)
+  })
+
+  it('returns an empty array when there are no archived envelopes', async () => {
+    await post('/envelopes', { name: 'StillActive' })
+    const res = await get('/envelopes?archived=true')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([])
+  })
+})
+
+describe('POST /envelopes/:id/restore', () => {
+  it('restores an archived envelope, returning it with archived: false', async () => {
+    const env = await (await post('/envelopes', { name: 'ToRestore' })).json() as any
+    await del(`/envelopes/${env.id}`)
+
+    const res = await app.request(`/envelopes/${env.id}/restore`, { method: 'POST', headers: H1 })
+    expect(res.status).toBe(200)
+    const body = await res.json() as any
+    expect(body.id).toBe(env.id)
+    expect(body.archived).toBe(false)
+  })
+
+  it('returns 404 with { error: "Not found" } for an unknown id', async () => {
+    const res = await app.request('/envelopes/nope/restore', { method: 'POST', headers: H1 })
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'Not found' })
+  })
+
+  it('is a harmless no-op (still 200, archived: false) when the envelope is already active', async () => {
+    const env = await (await post('/envelopes', { name: 'AlreadyActive' })).json() as any
+    const res = await app.request(`/envelopes/${env.id}/restore`, { method: 'POST', headers: H1 })
+    expect(res.status).toBe(200)
+    const body = await res.json() as any
+    expect(body.archived).toBe(false)
+  })
+
+  it('restored envelope reappears in default GET /envelopes and disappears from ?archived=true', async () => {
+    const env = await (await post('/envelopes', { name: 'RoundTrip' })).json() as any
+    await del(`/envelopes/${env.id}`)
+    await app.request(`/envelopes/${env.id}/restore`, { method: 'POST', headers: H1 })
+
+    const activeList = await (await get('/envelopes')).json() as any[]
+    expect(activeList.find((e: any) => e.id === env.id)).toBeDefined()
+
+    const archivedList = await (await get('/envelopes?archived=true')).json() as any[]
+    expect(archivedList.find((e: any) => e.id === env.id)).toBeUndefined()
+  })
+})
+
 describe('PUT /envelopes/:id', () => {
   it('updates an envelope', async () => {
     const env = await (await post('/envelopes', { name: 'Old' })).json() as any

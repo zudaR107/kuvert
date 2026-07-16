@@ -20,8 +20,9 @@ const accountSchema = z.object({
 
 router.get('/', async (c) => {
   const user = c.get('user')
+  const archived = c.req.query('archived') === 'true'
   const rows = await db.select().from(accounts)
-    .where(and(eq(accounts.userId, user.id), eq(accounts.archived, false)))
+    .where(and(eq(accounts.userId, user.id), eq(accounts.archived, archived)))
   return c.json(rows)
 })
 
@@ -97,6 +98,18 @@ router.delete('/:id', async (c) => {
   // Soft delete
   await db.update(accounts).set({ archived: true }).where(eq(accounts.id, id))
   return c.json({ ok: true })
+})
+
+router.post('/:id/restore', async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.param()
+
+  const existing = await db.select().from(accounts)
+    .where(and(eq(accounts.id, id), eq(accounts.userId, user.id))).get()
+  if (!existing) return c.json({ error: 'Not found' }, 404)
+
+  await db.update(accounts).set({ archived: false }).where(eq(accounts.id, id))
+  return c.json({ ...existing, archived: false })
 })
 
 // Computed balance = sum of transactions (a non-zero initialBalance is

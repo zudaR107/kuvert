@@ -63,9 +63,10 @@ router.delete('/categories/:id', async (c) => {
 // ── Envelopes ──────────────────────────────────────────────────────
 router.get('/', async (c) => {
   const user = c.get('user')
+  const archived = c.req.query('archived') === 'true'
   return c.json(
     await db.select().from(envelopes)
-      .where(and(eq(envelopes.userId, user.id), eq(envelopes.archived, false)))
+      .where(and(eq(envelopes.userId, user.id), eq(envelopes.archived, archived)))
   )
 })
 
@@ -96,6 +97,16 @@ router.delete('/:id', async (c) => {
   if (!existing) return c.json({ error: 'Not found' }, 404)
   await db.update(envelopes).set({ archived: true }).where(eq(envelopes.id, id))
   return c.json({ ok: true })
+})
+
+router.post('/:id/restore', async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.param()
+  const existing = await db.select().from(envelopes)
+    .where(and(eq(envelopes.id, id), eq(envelopes.userId, user.id))).get()
+  if (!existing) return c.json({ error: 'Not found' }, 404)
+  await db.update(envelopes).set({ archived: false }).where(eq(envelopes.id, id))
+  return c.json({ ...existing, archived: false })
 })
 
 export { router as envelopesRouter }

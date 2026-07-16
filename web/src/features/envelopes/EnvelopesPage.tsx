@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Mail, Archive, RefreshCw } from 'lucide-react'
-import { EmptyState, ICON_SIZE, Button, Badge, Field, Modal, Toast } from '@zudar107/schloss-ui'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { Plus, Mail, Archive, ArchiveRestore, RefreshCw } from 'lucide-react'
+import { EmptyState, ICON_SIZE, Button, SegmentedControl, Badge, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { useToast } from '../../hooks/useToast'
 
@@ -40,10 +40,12 @@ export function EnvelopesPage() {
   const toast = useToast()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Envelope | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   const { data: envelopes = [], isLoading } = useQuery<Envelope[]>({
-    queryKey: ['envelopes'],
-    queryFn: () => api.get('/envelopes'),
+    queryKey: ['envelopes', showArchived],
+    queryFn: () => api.get(`/envelopes?archived=${showArchived}`),
+    placeholderData: keepPreviousData,
   })
 
   const { data: categories = [] } = useQuery<Category[]>({
@@ -84,6 +86,16 @@ export function EnvelopesPage() {
     onError: () => toast.showError('Не удалось архивировать конверт'),
   })
 
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/envelopes/${id}/restore`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['envelopes'] })
+      qc.invalidateQueries({ queryKey: ['budget'] })
+      toast.showSuccess('Конверт восстановлен')
+    },
+    onError: () => toast.showError('Не удалось восстановить конверт'),
+  })
+
   function openCreate() {
     setEditing(null)
     setModalOpen(true)
@@ -122,26 +134,43 @@ export function EnvelopesPage() {
         </Button>
       </div>
 
+      <div style={{ marginBottom: '1rem' }}>
+        <SegmentedControl
+          options={[
+            { value: 'active', label: 'Активные' },
+            { value: 'archived', label: 'Архивные' },
+          ]}
+          value={showArchived ? 'archived' : 'active'}
+          onChange={(v) => setShowArchived(v === 'archived')}
+        />
+      </div>
+
       {isLoading ? (
         <SkeletonGrid />
       ) : envelopes.length === 0 ? (
-        <EmptyState
-          icon={<Mail size={ICON_SIZE.illustrative} strokeWidth={2} />}
-          title="Конвертов пока нет"
-          description="Конверт — это статья бюджета: продукты, транспорт, развлечения. Создай его здесь, а деньги в него распредели на странице «Бюджет»."
-          actionLabel="Добавить конверт"
-          actionIcon={<Plus size={16} />}
-          onAction={openCreate}
-        />
+        showArchived ? (
+          <ArchivedEmptyState />
+        ) : (
+          <EmptyState
+            icon={<Mail size={ICON_SIZE.illustrative} strokeWidth={2} />}
+            title="Конвертов пока нет"
+            description="Конверт — это статья бюджета: продукты, транспорт, развлечения. Создай его здесь, а деньги в него распредели на странице «Бюджет»."
+            actionLabel="Добавить конверт"
+            actionIcon={<Plus size={16} />}
+            onAction={openCreate}
+          />
+        )
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1rem' }}>
           {envelopes.map((e) => (
             <EnvelopeCard
               key={e.id}
               envelope={e}
+              archived={showArchived}
               category={e.categoryId ? categoryById.get(e.categoryId) : undefined}
               onEdit={() => openEdit(e)}
               onArchive={() => archiveMutation.mutate(e.id)}
+              onRestore={() => restoreMutation.mutate(e.id)}
             />
           ))}
         </div>
@@ -187,11 +216,13 @@ function toPayload(values: EnvelopeFormValues) {
   }
 }
 
-function EnvelopeCard({ envelope, category, onEdit, onArchive }: {
+function EnvelopeCard({ envelope, archived, category, onEdit, onArchive, onRestore }: {
   envelope: Envelope
+  archived: boolean
   category?: Category
   onEdit: () => void
   onArchive: () => void
+  onRestore: () => void
 }) {
   return (
     <div className="card" style={{ padding: '1.25rem', position: 'relative', overflow: 'hidden' }}>
@@ -212,14 +243,25 @@ function EnvelopeCard({ envelope, category, onEdit, onArchive }: {
             {category && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{category.name}</div>}
           </div>
         </div>
-        <Button
-          variant="ghost"
-          style={{ padding: '0.3rem', border: 'none' }}
-          onClick={onArchive}
-          aria-label="Архивировать конверт"
-        >
-          <Archive size={15} />
-        </Button>
+        {archived ? (
+          <Button
+            variant="ghost"
+            style={{ padding: '0.3rem', border: 'none' }}
+            onClick={onRestore}
+            aria-label="Восстановить конверт"
+          >
+            <ArchiveRestore size={15} />
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            style={{ padding: '0.3rem', border: 'none' }}
+            onClick={onArchive}
+            aria-label="Архивировать конверт"
+          >
+            <Archive size={15} />
+          </Button>
+        )}
       </div>
 
       {envelope.rolloverEnabled && (
@@ -228,13 +270,33 @@ function EnvelopeCard({ envelope, category, onEdit, onArchive }: {
         </Badge>
       )}
 
-      <Button
-        variant="ghost"
-        style={{ width: '100%', justifyContent: 'center', fontSize: '0.8125rem', border: 'none', marginTop: '0.75rem' }}
-        onClick={onEdit}
-      >
-        Изменить
-      </Button>
+      {!archived && (
+        <Button
+          variant="ghost"
+          style={{ width: '100%', justifyContent: 'center', fontSize: '0.8125rem', border: 'none', marginTop: '0.75rem' }}
+          onClick={onEdit}
+        >
+          Изменить
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function ArchivedEmptyState() {
+  return (
+    <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+      <div style={{
+        width: 52, height: 52, borderRadius: 14,
+        background: 'var(--bg-base)', color: 'var(--text-muted)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        margin: '0 auto 1rem',
+      }}>
+        <Mail size={ICON_SIZE.illustrative} strokeWidth={2} />
+      </div>
+      <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
+        Архивных конвертов нет
+      </h2>
     </div>
   )
 }

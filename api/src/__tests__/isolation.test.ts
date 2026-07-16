@@ -59,6 +59,20 @@ describe('Account isolation', () => {
     const acct = await (await asUser1.post('/accounts', { name: 'A' })).json() as any
     expect((await asUser2.del(`/accounts/${acct.id}`)).status).toBe(404)
   })
+
+  it('user-2 cannot restore user-1 archived account', async () => {
+    const acct = await (await asUser1.post('/accounts', { name: 'A' })).json() as any
+    await asUser1.del(`/accounts/${acct.id}`)
+    const res = await app.request(`/accounts/${acct.id}/restore`, { method: 'POST', headers: H2 })
+    expect(res.status).toBe(404)
+  })
+
+  it('user-2 sees no accounts in ?archived=true even when user-1 has archived accounts', async () => {
+    const acct = await (await asUser1.post('/accounts', { name: 'A' })).json() as any
+    await asUser1.del(`/accounts/${acct.id}`)
+    const list = await (await asUser2.get('/accounts?archived=true')).json() as any[]
+    expect(list).toHaveLength(0)
+  })
 })
 
 // ── Periods ────────────────────────────────────────────────────────
@@ -101,6 +115,20 @@ describe('Envelope isolation', () => {
   it('user-2 cannot delete user-1 envelope', async () => {
     const env = await (await asUser1.post('/envelopes', { name: 'Food' })).json() as any
     expect((await asUser2.del(`/envelopes/${env.id}`)).status).toBe(404)
+  })
+
+  it('user-2 cannot restore user-1 archived envelope', async () => {
+    const env = await (await asUser1.post('/envelopes', { name: 'Food' })).json() as any
+    await asUser1.del(`/envelopes/${env.id}`)
+    const res = await app.request(`/envelopes/${env.id}/restore`, { method: 'POST', headers: H2 })
+    expect(res.status).toBe(404)
+  })
+
+  it('user-2 sees no envelopes in ?archived=true even when user-1 has archived envelopes', async () => {
+    const env = await (await asUser1.post('/envelopes', { name: 'Food' })).json() as any
+    await asUser1.del(`/envelopes/${env.id}`)
+    const list = await (await asUser2.get('/envelopes?archived=true')).json() as any[]
+    expect(list).toHaveLength(0)
   })
 })
 
