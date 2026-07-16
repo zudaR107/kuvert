@@ -664,7 +664,7 @@ describe('BudgetPage allocation affordance', () => {
     expect(button).toHaveAttribute('title', 'Нажмите, чтобы распределить')
   })
 
-  it('clicking the allocated-amount control still swaps it for an editable input', async () => {
+  it('clicking the allocated-amount control focuses an editable input, and the display button is no longer reachable', async () => {
     const user = userEvent.setup()
     const button = await getAllocatedButton()
 
@@ -673,7 +673,35 @@ describe('BudgetPage allocation affordance', () => {
     const row = screen.getByText('Продукты').closest('tr') as HTMLElement
     const input = within(row).getByRole('textbox')
     expect(input).toBeInTheDocument()
-    expect(within(row).queryByRole('button')).not.toBeInTheDocument()
+    expect(input).toHaveFocus()
+    // The display button stays mounted (it crossfades out rather than
+    // unmounting) but must stop being keyboard/pointer reachable while
+    // editing - `getByRole` would otherwise find it too and this test's
+    // own `getByRole('textbox')` above would already be ambiguous.
+    expect(button).toHaveAttribute('tabindex', '-1')
+  })
+
+  it('the editable input is not keyboard-reachable before entering edit mode', async () => {
+    const button = await getAllocatedButton()
+    const row = button.closest('tr') as HTMLElement
+    const input = within(row).getByRole('textbox')
+    expect(input).toHaveAttribute('tabindex', '-1')
+  })
+
+  it('pressing Escape while editing cancels without allocating, and the amount stays reachable again on the button', async () => {
+    const user = userEvent.setup()
+    const button = await getAllocatedButton()
+    const row = button.closest('tr') as HTMLElement
+
+    await user.click(button)
+    const input = within(row).getByRole('textbox')
+    await user.clear(input)
+    await user.type(input, '999')
+    await user.keyboard('{Escape}')
+
+    expect(api.put).not.toHaveBeenCalled()
+    expect(button).toHaveAttribute('tabindex', '0')
+    expect(within(row).getByRole('textbox')).toHaveAttribute('tabindex', '-1')
   })
 
   // Swapping the pill button for the (differently-sized) editing input

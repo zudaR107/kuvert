@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, ClipboardList, Pencil, Plus, Trash2, Wallet } from 'lucide-react'
 import {
@@ -292,7 +292,31 @@ function PeriodForm({ formId, onSubmit }: {
 
 function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount: number) => void }) {
   const [editing, setEditing] = useState(false)
+  const [hovered, setHovered] = useState(false)
   const [value, setValue] = useState(String(fromMinorUnits(row.allocated)))
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (!editing) return
+    const input = inputRef.current
+    if (!input) return
+    input.focus()
+    if (input.value === '0') input.select()
+  }, [editing])
+
+  function commitAllocation() {
+    setEditing(false)
+    const n = parseFloat(value)
+    if (!isNaN(n)) onAllocate(toMinorUnits(n))
+  }
+
+  function cancelEditing() {
+    setEditing(false)
+    setValue(String(fromMinorUnits(row.allocated)))
+  }
+
+  const pillBackground = editing ? 'var(--bg-surface)' : hovered ? 'var(--accent)' : 'var(--accent-muted)'
+  const pillTextColor = editing ? 'var(--text-primary)' : hovered ? 'var(--text-inverted)' : 'var(--accent)'
 
   const pct = row.allocated > 0 ? Math.min(100, (row.spent / (row.allocated + row.carriedOver)) * 100) : 0
   const over = row.available < 0
@@ -335,10 +359,58 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
         </div>
       </td>
 
-      {/* Allocated (editable) */}
+      {/* Allocated (editable) - a single persistent container that morphs
+          shape (pill -> rounded box) and crossfades its two content
+          layers, rather than swapping between two separately-mounted
+          elements. Both layers stay mounted at all times so the CSS
+          transitions on opacity/border-radius/background actually have
+          something to animate between. */}
       <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
-        {editing ? (
-          <div style={{ position: 'relative', display: 'inline-block' }}>
+        <div
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          style={{
+            position: 'relative', display: 'inline-block',
+            width: 132, height: 32,
+            borderRadius: editing ? 8 : 999,
+            background: pillBackground,
+            border: '1px solid',
+            borderColor: editing ? 'var(--accent)' : 'transparent',
+            boxShadow: editing ? '0 0 0 3px var(--accent-muted)' : 'none',
+            transition: 'border-radius 200ms ease, background 200ms ease, border-color 200ms ease, box-shadow 200ms ease',
+          }}
+        >
+          {/* Display layer */}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            title="Нажмите, чтобы распределить"
+            tabIndex={editing ? -1 : 0}
+            style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.375rem',
+              padding: '0 0.75rem',
+              background: 'none', border: 'none', borderRadius: 'inherit',
+              color: pillTextColor, fontWeight: 700, fontSize: '0.875rem', fontFamily: 'inherit',
+              cursor: 'pointer',
+              opacity: editing ? 0 : 1,
+              pointerEvents: editing ? 'none' : 'auto',
+              transition: 'opacity 150ms ease, color 200ms ease',
+            }}
+          >
+            {formatAmount(row.allocated)}
+            <Pencil size={12} strokeWidth={2.5} />
+          </button>
+
+          {/* Edit layer */}
+          <div
+            style={{
+              position: 'absolute', inset: 0,
+              opacity: editing ? 1 : 0,
+              pointerEvents: editing ? 'auto' : 'none',
+              transition: 'opacity 150ms ease',
+            }}
+          >
             <span
               style={{
                 position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)',
@@ -348,60 +420,29 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
               ₽
             </span>
             <input
-              autoFocus
+              ref={inputRef}
               type="text"
               inputMode="decimal"
+              tabIndex={editing ? 0 : -1}
               value={formatGroupedNumber(value)}
               onChange={(e) => {
                 const cleaned = parseGroupedNumber(e.target.value)
                 if (/^-?\d*\.?\d*$/.test(cleaned)) setValue(cleaned)
               }}
-              onFocus={(e) => { if (value === '0') e.target.select() }}
-              onBlur={() => {
-                setEditing(false)
-                const n = parseFloat(value)
-                if (!isNaN(n)) onAllocate(toMinorUnits(n))
-              }}
+              onBlur={commitAllocation}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') e.currentTarget.blur()
-                if (e.key === 'Escape') { setEditing(false); setValue(String(fromMinorUnits(row.allocated))) }
+                if (e.key === 'Escape') cancelEditing()
               }}
               style={{
-                width: 112, textAlign: 'right', padding: '0.375rem 0.5rem 0.375rem 1.5rem',
-                border: '1px solid var(--accent)', borderRadius: 8, outline: 'none',
-                fontSize: '0.875rem', fontWeight: 500,
-                background: 'var(--bg-surface)', color: 'var(--text-primary)',
-                boxShadow: '0 0 0 3px var(--accent-muted)',
-                transition: 'border-color 150ms, box-shadow 150ms',
+                width: '100%', height: '100%', textAlign: 'right',
+                padding: '0 0.75rem 0 1.5rem',
+                border: 'none', outline: 'none', background: 'none',
+                fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-primary)', fontFamily: 'inherit',
               }}
             />
           </div>
-        ) : (
-          <button
-            onClick={() => setEditing(true)}
-            title="Нажмите, чтобы распределить"
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--accent)'
-              e.currentTarget.style.color = 'var(--text-inverted)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--accent-muted)'
-              e.currentTarget.style.color = 'var(--accent)'
-            }}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-              padding: '0.375rem 0.75rem',
-              background: 'var(--accent-muted)', color: 'var(--accent)',
-              border: 'none', borderRadius: 999,
-              fontWeight: 700, fontSize: '0.875rem', fontFamily: 'inherit',
-              cursor: 'pointer',
-              transition: 'background 150ms, color 150ms',
-            }}
-          >
-            {formatAmount(row.allocated)}
-            <Pencil size={12} strokeWidth={2.5} />
-          </button>
-        )}
+        </div>
       </td>
 
       {/* Spent */}
