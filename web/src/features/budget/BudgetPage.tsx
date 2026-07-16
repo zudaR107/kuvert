@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, ClipboardList, Plus, Trash2, Wallet } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ClipboardList, Pencil, Plus, Trash2, Wallet } from 'lucide-react'
 import {
   EmptyState, ICON_SIZE, Button, Amount, Field, DateRangeField, Modal, Toast,
   handleArrowFieldNavigation, formatGroupedNumber, parseGroupedNumber,
@@ -364,10 +364,27 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
         ) : (
           <button
             onClick={() => setEditing(true)}
-            className="allocated-cell"
             title="Нажмите, чтобы распределить"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--accent)'
+              e.currentTarget.style.color = 'var(--text-inverted)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--accent-muted)'
+              e.currentTarget.style.color = 'var(--accent)'
+            }}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
+              padding: '0.375rem 0.75rem',
+              background: 'var(--accent-muted)', color: 'var(--accent)',
+              border: 'none', borderRadius: 999,
+              fontWeight: 700, fontSize: '0.875rem', fontFamily: 'inherit',
+              cursor: 'pointer',
+              transition: 'background 150ms, color 150ms',
+            }}
           >
             {formatAmount(row.allocated)}
+            <Pencil size={12} strokeWidth={2.5} />
           </button>
         )}
       </td>

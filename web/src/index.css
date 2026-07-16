@@ -86,20 +86,6 @@
   }
   .btn-danger:hover { background: var(--danger); color: var(--text-inverted); }
 
-  .allocated-cell {
-    background: none;
-    border: none;
-    border-bottom: 1px dashed var(--text-muted);
-    cursor: pointer;
-    font-weight: 500;
-    color: var(--text-primary);
-    font-size: 0.875rem;
-    padding: 0.25rem 0.375rem;
-    border-radius: 4px;
-    transition: background 150ms, border-color 150ms;
-  }
-  .allocated-cell:hover { background: var(--bg-base); border-bottom-color: var(--accent); }
-
   .input {
     background: var(--bg-surface); border: 1px solid var(--border);
     border-radius: var(--radius-md); padding: 0.5rem 0.75rem;
