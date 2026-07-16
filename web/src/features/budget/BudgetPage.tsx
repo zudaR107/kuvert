@@ -208,11 +208,26 @@ export function BudgetPage() {
         <SkeletonList />
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+          <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Конверт', 'Выделено', 'Потрачено', 'Доступно'].map((h) => (
-                  <th key={h} style={{ padding: '0.625rem 1rem', textAlign: h === 'Конверт' ? 'left' : 'right', color: 'var(--text-muted)', fontWeight: 500, fontSize: '0.75rem' }}>{h}</th>
+                {[
+                  { label: 'Конверт' },
+                  { label: 'Выделено', width: 170 },
+                  { label: 'Потрачено', width: 130 },
+                  { label: 'Доступно', width: 140 },
+                ].map(({ label, width }) => (
+                  <th
+                    key={label}
+                    style={{
+                      width,
+                      padding: '0.625rem 1rem',
+                      textAlign: label === 'Конверт' ? 'left' : 'right',
+                      color: 'var(--text-muted)', fontWeight: 500, fontSize: '0.75rem',
+                    }}
+                  >
+                    {label}
+                  </th>
                 ))}
               </tr>
             </thead>
