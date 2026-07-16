@@ -370,8 +370,13 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           style={{
-            position: 'relative', display: 'inline-block',
-            width: 132, height: 32,
+            position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end',
+            // Idle: sized to content by the in-flow button below - a
+            // short "0 ₽" pill stays compact instead of stretching to
+            // the input's own (wider, fixed) editing width. Only takes
+            // an explicit width once editing needs room for the input.
+            width: editing ? 132 : undefined,
+            height: 32,
             borderRadius: editing ? 8 : 999,
             background: pillBackground,
             border: '1px solid',
@@ -380,16 +385,20 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
             transition: 'border-radius 200ms ease, background 200ms ease, border-color 200ms ease, box-shadow 200ms ease',
           }}
         >
-          {/* Display layer */}
+          {/* Display layer - in normal flow while idle (so it sizes the
+              container to its own content), lifted out of flow while
+              editing (so it can't force the container wider than the
+              fixed editing width while it fades out). */}
           <button
             type="button"
             onClick={() => setEditing(true)}
             title="Нажмите, чтобы распределить"
             tabIndex={editing ? -1 : 0}
             style={{
-              position: 'absolute', inset: 0,
+              position: editing ? 'absolute' : 'static',
+              inset: editing ? 0 : undefined,
               display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.375rem',
-              padding: '0 0.75rem',
+              padding: '0.375rem 0.75rem',
               background: 'none', border: 'none', borderRadius: 'inherit',
               color: pillTextColor, fontWeight: 700, fontSize: '0.875rem', fontFamily: 'inherit',
               cursor: 'pointer',
