@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within, act, fireEvent } from '@testing-library/react'
+import { render, screen, within, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BudgetPage } from '../features/budget/BudgetPage'
@@ -67,6 +67,28 @@ beforeEach(() => {
   vi.mocked(api.get).mockReset()
   vi.mocked(api.put).mockReset()
 })
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+// DateRangeField's calendar popover is portaled to document.body, so its
+// day buttons are queried via the global `screen`, not `within(dialog)`
+// even though the trigger field itself lives inside the dialog.
+async function clickPeriodStart(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement) {
+  await user.click(within(dialog).getByLabelText('Период'))
+  await user.click(screen.getByRole('button', { name: todayISO() }))
+}
+
+// Picks "today" as start and the 15th of next month as end - deterministic
+// regardless of what day-of-month the suite happens to run on, with no
+// reliance on a hardcoded calendar date.
+async function pickPeriodRange(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement) {
+  await clickPeriodStart(user, dialog)
+  await user.click(screen.getByRole('button', { name: 'Следующий месяц' }))
+  const endButton = screen.getAllByRole('button', { name: /-15$/ })[0] as HTMLElement
+  await user.click(endButton)
+}
 
 // ---------------------------------------------------------------------------
 // Empty state
@@ -294,7 +316,7 @@ describe('BudgetPage create-period modal', () => {
     expect(dialog).toBeInTheDocument()
   })
 
-  it('the form has an optional name textbox (a placeholder covers it when blank), required start/end date inputs, and a submit button', async () => {
+  it('the form has an optional name textbox (a placeholder covers it when blank), a required "Период" field, and a submit button', async () => {
     vi.mocked(api.get).mockImplementation((path: string) => {
       if (path === '/periods') return Promise.resolve([mockPeriod])
       return Promise.resolve(mockBudgetData)
@@ -305,12 +327,11 @@ describe('BudgetPage create-period modal', () => {
     await user.click(screen.getByRole('button', { name: 'Новый бюджет' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новый бюджетный период' })
 
-    const nameInput = within(dialog).getByRole('textbox')
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Название' })
     expect(nameInput).not.toBeRequired()
 
-    const dateInputs = dialog.querySelectorAll('input[type="date"]')
-    expect(dateInputs.length).toBe(2)
-    dateInputs.forEach((input) => expect(input).toBeRequired())
+    const periodField = within(dialog).getByLabelText('Период')
+    expect(periodField).toBeRequired()
 
     within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
   })
@@ -327,8 +348,9 @@ describe('BudgetPage create-period modal', () => {
     await user.click(screen.getByRole('button', { name: 'Новый бюджет' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новый бюджетный период' })
 
-    const nameInput = within(dialog).getByRole('textbox')
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Название' })
     await user.type(nameInput, 'Август 2024')
+    await pickPeriodRange(user, dialog)
 
     const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
     await user.click(submitButton)
@@ -356,8 +378,9 @@ describe('BudgetPage create-period modal', () => {
     await user.click(screen.getByRole('button', { name: 'Новый бюджет' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новый бюджетный период' })
 
-    const nameInput = within(dialog).getByRole('textbox')
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Название' })
     await user.type(nameInput, 'Август 2024')
+    await pickPeriodRange(user, dialog)
 
     const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
     await user.click(submitButton)
@@ -391,7 +414,7 @@ describe('BudgetPage create-period modal name field placeholder', () => {
     const user = userEvent.setup()
     const dialog = await openModal(user)
 
-    const nameInput = within(dialog).getByRole('textbox') as HTMLInputElement
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Название' }) as HTMLInputElement
     const expectedPlaceholder = formatMonthYear(new Date().toISOString().slice(0, 10))
     expect(nameInput.placeholder).toBe(expectedPlaceholder)
   })
@@ -400,13 +423,10 @@ describe('BudgetPage create-period modal name field placeholder', () => {
     const user = userEvent.setup()
     const dialog = await openModal(user)
 
-    const nameInput = within(dialog).getByRole('textbox') as HTMLInputElement
-    const dateInputs = Array.from(dialog.querySelectorAll('input[type="date"]')) as HTMLInputElement[]
-    const startInput = dateInputs[0]
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Название' }) as HTMLInputElement
+    await clickPeriodStart(user, dialog)
 
-    fireEvent.change(startInput, { target: { value: '2026-03-15' } })
-
-    expect(nameInput.placeholder).toBe('Март 2026')
+    expect(nameInput.placeholder).toBe(formatMonthYear(todayISO()))
   })
 
   it('submitting with a blank name posts the computed placeholder (formatMonthYear of startDate) as the name', async () => {
@@ -414,12 +434,7 @@ describe('BudgetPage create-period modal name field placeholder', () => {
     const user = userEvent.setup()
     const dialog = await openModal(user)
 
-    const dateInputs = Array.from(dialog.querySelectorAll('input[type="date"]')) as HTMLInputElement[]
-    const startInput = dateInputs[0]
-    const endInput = dateInputs[1]
-
-    fireEvent.change(startInput, { target: { value: '2026-03-15' } })
-    fireEvent.change(endInput, { target: { value: '2026-03-31' } })
+    await pickPeriodRange(user, dialog)
 
     // Name field left blank
     const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
@@ -429,7 +444,7 @@ describe('BudgetPage create-period modal name field placeholder', () => {
     const [path, body] = vi.mocked(api.post).mock.calls[0]
     expect(path).toBe('/periods')
     const b = body as Record<string, unknown>
-    expect(b.name).toBe('Март 2026')
+    expect(b.name).toBe(formatMonthYear(todayISO()))
     expect(b.name).not.toBe('')
   })
 
@@ -438,14 +453,9 @@ describe('BudgetPage create-period modal name field placeholder', () => {
     const user = userEvent.setup()
     const dialog = await openModal(user)
 
-    const dateInputs = Array.from(dialog.querySelectorAll('input[type="date"]')) as HTMLInputElement[]
-    const startInput = dateInputs[0]
-    const endInput = dateInputs[1]
+    await pickPeriodRange(user, dialog)
 
-    fireEvent.change(startInput, { target: { value: '2026-03-15' } })
-    fireEvent.change(endInput, { target: { value: '2026-03-31' } })
-
-    const nameInput = within(dialog).getByRole('textbox')
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Название' })
     await user.type(nameInput, '   ')
 
     const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
@@ -454,7 +464,7 @@ describe('BudgetPage create-period modal name field placeholder', () => {
     expect(api.post).toHaveBeenCalledTimes(1)
     const [, body] = vi.mocked(api.post).mock.calls[0]
     const b = body as Record<string, unknown>
-    expect(b.name).toBe('Март 2026')
+    expect(b.name).toBe(formatMonthYear(todayISO()))
   })
 
   it('submitting with an explicit name uses the typed value as-is, not the placeholder', async () => {
@@ -462,14 +472,9 @@ describe('BudgetPage create-period modal name field placeholder', () => {
     const user = userEvent.setup()
     const dialog = await openModal(user)
 
-    const dateInputs = Array.from(dialog.querySelectorAll('input[type="date"]')) as HTMLInputElement[]
-    const startInput = dateInputs[0]
-    const endInput = dateInputs[1]
+    await pickPeriodRange(user, dialog)
 
-    fireEvent.change(startInput, { target: { value: '2026-03-15' } })
-    fireEvent.change(endInput, { target: { value: '2026-03-31' } })
-
-    const nameInput = within(dialog).getByRole('textbox')
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Название' })
     await user.type(nameInput, 'Мой личный бюджет')
 
     const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
@@ -666,7 +671,7 @@ describe('BudgetPage allocation affordance', () => {
     await user.click(button)
 
     const row = screen.getByText('Продукты').closest('tr') as HTMLElement
-    const input = within(row).getByRole('spinbutton')
+    const input = within(row).getByRole('textbox')
     expect(input).toBeInTheDocument()
     expect(within(row).queryByRole('button')).not.toBeInTheDocument()
   })

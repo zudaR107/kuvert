@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Plus, ArrowDownLeft, ArrowUpRight, Check, Handshake, Trash2 } from 'lucide-react'
-import { EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, SegmentedControl, Amount, StatTile, Field, Modal, Toast } from '@zudar107/schloss-ui'
+import {
+  EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, SegmentedControl, Amount, StatTile,
+  Field, DateField, AmountField, Modal, Toast, handleArrowFieldNavigation,
+} from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits } from '../../lib/format'
 import { useToast } from '../../hooks/useToast'
@@ -280,6 +283,7 @@ function DebtForm({ formId, initial, onSubmit }: {
         e.preventDefault()
         onSubmit({ ...values, counterparty: values.counterparty.trim() || DEBT_COUNTERPARTY_PLACEHOLDER })
       }}
+      onKeyDown={handleArrowFieldNavigation}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -303,15 +307,12 @@ function DebtForm({ formId, initial, onSubmit }: {
 
       <div style={{ display: 'flex', gap: '0.75rem' }}>
         <div style={{ flex: 1 }}>
-          <Field
+          <AmountField
             id="debt-amount"
             label="Сумма"
-            type="number"
-            step="0.01"
-            min="0.01"
-            prefix="₽"
+            currencyCode={values.currency}
             value={values.amount}
-            onChange={(e) => set('amount', e.target.value)}
+            onChange={(v) => set('amount', v)}
             required
           />
         </div>
@@ -327,12 +328,11 @@ function DebtForm({ formId, initial, onSubmit }: {
         </div>
       </div>
 
-      <Field
+      <DateField
         id="debt-due-date"
         label="Срок (необязательно)"
-        type="date"
         value={values.dueDate}
-        onChange={(e) => set('dueDate', e.target.value)}
+        onChange={(v) => set('dueDate', v)}
       />
 
       <Field

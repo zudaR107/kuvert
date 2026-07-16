@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within, fireEvent } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { GoalsPage } from '../features/goals/GoalsPage'
@@ -91,6 +91,15 @@ function createWrapper() {
 beforeEach(() => {
   vi.mocked(api.get).mockReset()
 })
+
+// DateField's calendar popover is portaled to document.body, so its day
+// buttons are queried via the global `screen`, not `within(dialog)` even
+// though the trigger field itself lives inside the dialog.
+async function pickToday(user: ReturnType<typeof userEvent.setup>, dateField: HTMLElement) {
+  await user.click(dateField)
+  const todayISO = new Date().toISOString().slice(0, 10)
+  await user.click(screen.getByRole('button', { name: todayISO }))
+}
 
 // ---------------------------------------------------------------------------
 // Page title
@@ -252,7 +261,7 @@ describe('GoalsPage create-goal modal', () => {
     expect(dialog).toBeInTheDocument()
   })
 
-  it('the form has an optional name textbox (a placeholder covers it when blank), a required target-amount input, an optional deadline date input, a recurring checkbox, and a submit button', async () => {
+  it('the form has an optional name textbox (a placeholder covers it when blank), a required target-amount field, an optional "Срок" date field, a recurring checkbox, and a submit button', async () => {
     mockApiForGoals([activeGoal])
     const user = userEvent.setup()
     render(<GoalsPage />, { wrapper: createWrapper() })
@@ -260,21 +269,18 @@ describe('GoalsPage create-goal modal', () => {
     await user.click(screen.getByRole('button', { name: 'Новая цель' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
 
-    const textboxes = within(dialog).getAllByRole('textbox')
-    expect(textboxes.length).toBeGreaterThanOrEqual(1)
-    textboxes.forEach((t) => expect(t).not.toBeRequired())
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Название' })
+    expect(nameInput).not.toBeRequired()
 
-    const spinbuttons = within(dialog).getAllByRole('spinbutton')
-    const requiredSpin = spinbuttons.find((s) => s.hasAttribute('required'))
-    expect(requiredSpin).toBeDefined()
+    const targetField = within(dialog).getByLabelText('Целевая сумма')
+    expect(targetField).toBeRequired()
 
     const checkbox = within(dialog).getByRole('checkbox')
     expect(checkbox).toBeInTheDocument()
     expect(checkbox).not.toBeChecked()
 
-    const dateInput = dialog.querySelector('input[type="date"]')
-    expect(dateInput).not.toBeNull()
-    expect(dateInput).not.toBeRequired()
+    const deadlineField = within(dialog).getByLabelText('Срок (необязательно)')
+    expect(deadlineField).not.toBeRequired()
 
     within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
   })
@@ -288,12 +294,10 @@ describe('GoalsPage create-goal modal', () => {
     await user.click(screen.getByRole('button', { name: 'Новая цель' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
 
-    const textboxes = within(dialog).getAllByRole('textbox')
-    const nameInput = textboxes.find((t) => t.hasAttribute('required')) ?? textboxes[0]
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Название' })
     await user.type(nameInput, 'Машина')
 
-    const spinbuttons = within(dialog).getAllByRole('spinbutton')
-    const amountInput = spinbuttons.find((s) => s.hasAttribute('required')) ?? spinbuttons[0]
+    const amountInput = within(dialog).getByLabelText('Целевая сумма')
     await user.clear(amountInput)
     await user.type(amountInput, '150.75')
 
@@ -320,12 +324,10 @@ describe('GoalsPage create-goal modal', () => {
     await user.click(screen.getByRole('button', { name: 'Новая цель' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
 
-    const textboxes = within(dialog).getAllByRole('textbox')
-    const nameInput = textboxes.find((t) => t.hasAttribute('required')) ?? textboxes[0]
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Название' })
     await user.type(nameInput, 'Отпуск на море')
 
-    const spinbuttons = within(dialog).getAllByRole('spinbutton')
-    const amountInput = spinbuttons.find((s) => s.hasAttribute('required')) ?? spinbuttons[0]
+    const amountInput = within(dialog).getByLabelText('Целевая сумма')
     await user.clear(amountInput)
     await user.type(amountInput, '500')
 
@@ -352,12 +354,10 @@ describe('GoalsPage create-goal modal', () => {
     await user.click(screen.getByRole('button', { name: 'Новая цель' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
 
-    const textboxes = within(dialog).getAllByRole('textbox')
-    const nameInput = textboxes.find((t) => t.hasAttribute('required')) ?? textboxes[0]
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Название' })
     await user.type(nameInput, 'Машина')
 
-    const spinbuttons = within(dialog).getAllByRole('spinbutton')
-    const amountInput = spinbuttons.find((s) => s.hasAttribute('required')) ?? spinbuttons[0]
+    const amountInput = within(dialog).getByLabelText('Целевая сумма')
     await user.clear(amountInput)
     await user.type(amountInput, '1000')
 
@@ -404,7 +404,7 @@ describe('GoalsPage contribute flow', () => {
     expect(dialog).toBeInTheDocument()
   })
 
-  it('the contribution form has a required account select (populated from GET /accounts), a required amount input, a required date input, an optional note input, and a submit button', async () => {
+  it('the contribution form has a required account select (populated from GET /accounts), a required amount input, a required date field, an optional note input, and a submit button', async () => {
     mockApiForGoals([activeGoal])
     const user = userEvent.setup()
     render(<GoalsPage />, { wrapper: createWrapper() })
@@ -418,13 +418,11 @@ describe('GoalsPage contribute flow', () => {
       expect(select.options.length).toBeGreaterThanOrEqual(mockAccounts.length)
     })
 
-    const spinbuttons = within(dialog).getAllByRole('spinbutton')
-    const requiredSpin = spinbuttons.find((s) => s.hasAttribute('required'))
-    expect(requiredSpin).toBeDefined()
+    const amountInput = within(dialog).getByLabelText('Сумма')
+    expect(amountInput).toBeRequired()
 
-    const dateInput = dialog.querySelector('input[type="date"]')
-    expect(dateInput).not.toBeNull()
-    expect(dateInput).toBeRequired()
+    const dateField = within(dialog).getByLabelText('Дата')
+    expect(dateField).toBeRequired()
 
     within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить|Пополнить/ })
   })
@@ -442,13 +440,11 @@ describe('GoalsPage contribute flow', () => {
     await vi.waitFor(() => expect(select.options.length).toBeGreaterThanOrEqual(mockAccounts.length))
     await user.selectOptions(select, 'acc-2')
 
-    const spinbuttons = within(dialog).getAllByRole('spinbutton')
-    const amountInput = spinbuttons.find((s) => s.hasAttribute('required')) ?? spinbuttons[0]
+    const amountInput = within(dialog).getByLabelText('Сумма')
     await user.clear(amountInput)
     await user.type(amountInput, '20.25')
 
-    const dateInput = dialog.querySelector('input[type="date"]') as HTMLInputElement
-    fireEvent.change(dateInput, { target: { value: '2024-08-15' } })
+    await pickToday(user, within(dialog).getByLabelText('Дата'))
 
     const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить|Пополнить/ })
     await user.click(submitButton)
@@ -476,13 +472,11 @@ describe('GoalsPage contribute flow', () => {
     await vi.waitFor(() => expect(select.options.length).toBeGreaterThanOrEqual(mockAccounts.length))
     await user.selectOptions(select, 'acc-1')
 
-    const spinbuttons = within(dialog).getAllByRole('spinbutton')
-    const amountInput = spinbuttons.find((s) => s.hasAttribute('required')) ?? spinbuttons[0]
+    const amountInput = within(dialog).getByLabelText('Сумма')
     await user.clear(amountInput)
     await user.type(amountInput, '10')
 
-    const dateInput = dialog.querySelector('input[type="date"]') as HTMLInputElement
-    fireEvent.change(dateInput, { target: { value: '2024-08-15' } })
+    await pickToday(user, within(dialog).getByLabelText('Дата'))
 
     const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить|Пополнить/ })
     await user.click(submitButton)

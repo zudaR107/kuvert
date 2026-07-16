@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Plus, Wallet, CreditCard, PiggyBank, Landmark, Archive, ArchiveRestore } from 'lucide-react'
-import { EmptyState, ICON_SIZE, Button, SegmentedControl, Amount, Field, Modal, Toast } from '@zudar107/schloss-ui'
+import {
+  EmptyState, ICON_SIZE, Button, SegmentedControl, Amount, Field, AmountField, Modal, Toast,
+  handleArrowFieldNavigation,
+} from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, toMinorUnits, fromMinorUnits } from '../../lib/format'
 import { useToast } from '../../hooks/useToast'
@@ -348,6 +351,7 @@ function AccountForm({ formId, initial, isEditing, onSubmit }: {
         e.preventDefault()
         onSubmit({ ...values, name: values.name.trim() || ACCOUNT_NAME_PLACEHOLDER })
       }}
+      onKeyDown={handleArrowFieldNavigation}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -383,14 +387,12 @@ function AccountForm({ formId, initial, isEditing, onSubmit }: {
         </div>
         {!isEditing && (
           <div style={{ flex: 1 }}>
-            <Field
+            <AmountField
               id="account-balance"
               label="Начальный баланс"
-              type="number"
-              step="0.01"
-              prefix="₽"
+              currencyCode={values.currency}
               value={values.initialBalance}
-              onChange={(e) => set('initialBalance', e.target.value)}
+              onChange={(v) => set('initialBalance', v)}
             />
           </div>
         )}

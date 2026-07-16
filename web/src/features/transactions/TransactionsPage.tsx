@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Plus, CreditCard, Receipt, Trash2 } from 'lucide-react'
-import { EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, Amount, StatTile, Field, Modal, Toast } from '@zudar107/schloss-ui'
+import {
+  EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, Amount, StatTile, Field,
+  DateField, DateRangeField, AmountField, Modal, Toast, handleArrowFieldNavigation,
+} from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits, today } from '../../lib/format'
 import { useToast } from '../../hooks/useToast'
@@ -293,8 +296,15 @@ function TransactionFilters({ filters, accounts, envelopes, onChange }: {
         <option value="expense">Расход</option>
         <option value="transfer">Перевод</option>
       </select>
-      <input className="input" style={{ width: 'auto' }} type="date" aria-label="С" value={filters.from} onChange={(e) => set('from', e.target.value)} />
-      <input className="input" style={{ width: 'auto' }} type="date" aria-label="По" value={filters.to} onChange={(e) => set('to', e.target.value)} />
+      <div style={{ width: 220 }}>
+        <DateRangeField
+          id="tx-filter-range"
+          label="Период"
+          start={filters.from}
+          end={filters.to}
+          onChange={(from, to) => onChange({ ...filters, from, to })}
+        />
+      </div>
     </div>
   )
 }
@@ -357,6 +367,7 @@ function TransactionForm({ formId, accounts, envelopes, initial, onSubmit }: {
     <form
       id={formId}
       onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
+      onKeyDown={handleArrowFieldNavigation}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field as="select" id="tx-type" label="Тип" value={values.type} onChange={(e) => set('type', e.target.value as TxType)}>
@@ -403,25 +414,20 @@ function TransactionForm({ formId, accounts, envelopes, initial, onSubmit }: {
 
       <div style={{ display: 'flex', gap: '0.75rem' }}>
         <div style={{ flex: 1 }}>
-          <Field
+          <AmountField
             id="tx-amount"
             label="Сумма"
-            type="number"
-            step="0.01"
-            min="0.01"
-            prefix="₽"
             value={values.amount}
-            onChange={(e) => set('amount', e.target.value)}
+            onChange={(v) => set('amount', v)}
             required
           />
         </div>
         <div style={{ flex: 1 }}>
-          <Field
+          <DateField
             id="tx-date"
             label="Дата"
-            type="date"
             value={values.date}
-            onChange={(e) => set('date', e.target.value)}
+            onChange={(v) => set('date', v)}
             required
           />
         </div>
