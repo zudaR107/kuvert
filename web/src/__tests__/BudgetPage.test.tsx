@@ -654,9 +654,9 @@ describe('BudgetPage allocation affordance', () => {
     return within(row).getByRole('button')
   }
 
-  it('the allocated-amount control has the "allocated-cell" class', async () => {
+  it('the allocated-amount control renders an edit icon alongside the amount, making it read as clickable', async () => {
     const button = await getAllocatedButton()
-    expect(button.classList.contains('allocated-cell')).toBe(true)
+    expect(button.querySelector('svg')).toBeInTheDocument()
   })
 
   it('the allocated-amount control has a discoverability title attribute', async () => {
