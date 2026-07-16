@@ -352,7 +352,8 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
         ) : (
           <button
             onClick={() => setEditing(true)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.875rem', padding: '0.25rem 0.375rem', borderRadius: 4 }}
+            className="allocated-cell"
+            title="Нажмите, чтобы распределить"
           >
             {formatAmount(row.allocated)}
           </button>

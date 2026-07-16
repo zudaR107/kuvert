@@ -628,3 +628,46 @@ describe('BudgetPage delete-period flow', () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Allocated-cell click affordance (new behaviour): the "Выделено" control
+// previously looked like plain read-only text with no visual hint it was
+// clickable. It now gets a distinguishing class and a native tooltip.
+// ---------------------------------------------------------------------------
+describe('BudgetPage allocation affordance', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/periods') return Promise.resolve([mockPeriod])
+      return Promise.resolve(mockBudgetData)
+    })
+  })
+
+  async function getAllocatedButton() {
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    await screen.findByRole('table')
+    const row = screen.getByText('Продукты').closest('tr') as HTMLElement
+    return within(row).getByRole('button')
+  }
+
+  it('the allocated-amount control has the "allocated-cell" class', async () => {
+    const button = await getAllocatedButton()
+    expect(button.classList.contains('allocated-cell')).toBe(true)
+  })
+
+  it('the allocated-amount control has a discoverability title attribute', async () => {
+    const button = await getAllocatedButton()
+    expect(button).toHaveAttribute('title', 'Нажмите, чтобы распределить')
+  })
+
+  it('clicking the allocated-amount control still swaps it for an editable input', async () => {
+    const user = userEvent.setup()
+    const button = await getAllocatedButton()
+
+    await user.click(button)
+
+    const row = screen.getByText('Продукты').closest('tr') as HTMLElement
+    const input = within(row).getByRole('spinbutton')
+    expect(input).toBeInTheDocument()
+    expect(within(row).queryByRole('button')).not.toBeInTheDocument()
+  })
+})
