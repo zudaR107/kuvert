@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, ClipboardList, Plus, Trash2, Wallet } from 'lucide-react'
-import { EmptyState, ICON_SIZE, Button, Amount, Field, Modal, Toast } from '@zudar107/schloss-ui'
+import {
+  EmptyState, ICON_SIZE, Button, Amount, Field, DateRangeField, Modal, Toast,
+  handleArrowFieldNavigation, formatGroupedNumber, parseGroupedNumber,
+} from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatMonthYear, fromMinorUnits, toMinorUnits, today } from '../../lib/format'
 import { useToast } from '../../hooks/useToast'
@@ -249,6 +252,7 @@ function PeriodForm({ formId, onSubmit }: {
         e.preventDefault()
         onSubmit({ ...values, name: values.name.trim() || suggestedName })
       }}
+      onKeyDown={handleArrowFieldNavigation}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -259,28 +263,14 @@ function PeriodForm({ formId, onSubmit }: {
         placeholder={suggestedName}
       />
 
-      <div style={{ display: 'flex', gap: '0.75rem' }}>
-        <div style={{ flex: 1 }}>
-          <Field
-            id="period-start"
-            label="Начало"
-            type="date"
-            value={values.startDate}
-            onChange={(e) => set('startDate', e.target.value)}
-            required
-          />
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field
-            id="period-end"
-            label="Конец"
-            type="date"
-            value={values.endDate}
-            onChange={(e) => set('endDate', e.target.value)}
-            required
-          />
-        </div>
-      </div>
+      <DateRangeField
+        id="period-range"
+        label="Период"
+        start={values.startDate}
+        end={values.endDate}
+        onChange={(startDate, endDate) => setValues((v) => ({ ...v, startDate, endDate }))}
+        required
+      />
     </form>
   )
 }
@@ -335,9 +325,14 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
         {editing ? (
           <input
             autoFocus
-            type="number"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
+            type="text"
+            inputMode="decimal"
+            value={formatGroupedNumber(value)}
+            onChange={(e) => {
+              const cleaned = parseGroupedNumber(e.target.value)
+              if (/^-?\d*\.?\d*$/.test(cleaned)) setValue(cleaned)
+            }}
+            onFocus={(e) => { if (value === '0') e.target.select() }}
             onBlur={() => {
               setEditing(false)
               const n = parseFloat(value)

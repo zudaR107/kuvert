@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TransactionsPage } from '../features/transactions/TransactionsPage'
 import { formatAmount, formatDate, fromMinorUnits } from '../lib/format'
+import { formatGroupedNumber } from '@zudar107/schloss-ui'
 
 // ---------------------------------------------------------------------------
 // Mock the api module
@@ -124,6 +125,19 @@ function findSelectByOptionValues(
 // two depending on whether the form is in transfer mode).
 function findSelectsWithAnyOptionValue(combos: HTMLSelectElement[], values: string[]): HTMLSelectElement[] {
   return combos.filter((c) => Array.from(c.options).some((o) => values.includes(o.value)))
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+// DateField/DateRangeField's calendar popover is portaled to
+// document.body, so its day buttons are queried via the global `screen`,
+// not `within(dialog)` even though the trigger field itself lives inside
+// the dialog.
+async function pickToday(user: ReturnType<typeof userEvent.setup>, dateField: HTMLElement) {
+  await user.click(dateField)
+  await user.click(screen.getByRole('button', { name: todayISO() }))
 }
 
 beforeEach(() => {
@@ -329,9 +343,9 @@ describe('TransactionsPage edit-on-row-click', () => {
 // Filter controls
 // ---------------------------------------------------------------------------
 describe('TransactionsPage filter controls', () => {
-  it('renders comboboxes for account, envelope, and type, plus two date inputs', async () => {
+  it('renders comboboxes for account, envelope, and type, plus a "Период" date-range field', async () => {
     mockApi()
-    const { container } = render(<TransactionsPage />, { wrapper: createWrapper() })
+    render(<TransactionsPage />, { wrapper: createWrapper() })
 
     let accountSelect: HTMLSelectElement | undefined
     let envelopeSelect: HTMLSelectElement | undefined
@@ -347,8 +361,7 @@ describe('TransactionsPage filter controls', () => {
       expect(typeSelect).toBeTruthy()
     })
 
-    const dateInputs = container.querySelectorAll('input[type="date"]')
-    expect(dateInputs.length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByLabelText('Период')).toBeInTheDocument()
   })
 
   it('selecting a specific account triggers a GET /transactions call whose query contains accountId=<id>', async () => {
@@ -416,41 +429,41 @@ describe('TransactionsPage filter controls', () => {
     })
   })
 
-  it('setting the "date from" filter triggers a GET /transactions call reflecting that date', async () => {
+  it('picking a period start (first click) triggers a GET /transactions call reflecting that date', async () => {
     mockApi()
-    const { container } = render(<TransactionsPage />, { wrapper: createWrapper() })
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper() })
 
-    await waitFor(() => {
-      expect(container.querySelectorAll('input[type="date"]').length).toBeGreaterThanOrEqual(2)
-    })
-
-    const dateInputs = Array.from(container.querySelectorAll('input[type="date"]')) as HTMLInputElement[]
+    const periodField = await screen.findByLabelText('Период')
 
     vi.mocked(api.get).mockClear()
-    fireEvent.change(dateInputs[0], { target: { value: '2024-06-01' } })
+    await user.click(periodField)
+    await user.click(screen.getByRole('button', { name: todayISO() }))
 
     await waitFor(() => {
       const calledPaths = vi.mocked(api.get).mock.calls.map((c) => c[0])
-      expect(calledPaths.some((p) => p.startsWith('/transactions') && p.includes('2024-06-01'))).toBe(true)
+      expect(calledPaths.some((p) => p.startsWith('/transactions') && p.includes(todayISO()))).toBe(true)
     })
   })
 
-  it('setting the "date to" filter triggers a GET /transactions call reflecting that date', async () => {
+  it('picking a period end (second click) triggers a GET /transactions call reflecting that date', async () => {
     mockApi()
-    const { container } = render(<TransactionsPage />, { wrapper: createWrapper() })
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper() })
 
-    await waitFor(() => {
-      expect(container.querySelectorAll('input[type="date"]').length).toBeGreaterThanOrEqual(2)
-    })
-
-    const dateInputs = Array.from(container.querySelectorAll('input[type="date"]')) as HTMLInputElement[]
+    const periodField = await screen.findByLabelText('Период')
+    await user.click(periodField)
+    await user.click(screen.getByRole('button', { name: todayISO() }))
+    await user.click(screen.getByRole('button', { name: 'Следующий месяц' }))
+    const endButton = screen.getAllByRole('button', { name: /-15$/ })[0] as HTMLElement
+    const endISO = endButton.getAttribute('aria-label') as string
 
     vi.mocked(api.get).mockClear()
-    fireEvent.change(dateInputs[1], { target: { value: '2024-06-30' } })
+    await user.click(endButton)
 
     await waitFor(() => {
       const calledPaths = vi.mocked(api.get).mock.calls.map((c) => c[0])
-      expect(calledPaths.some((p) => p.startsWith('/transactions') && p.includes('2024-06-30'))).toBe(true)
+      expect(calledPaths.some((p) => p.startsWith('/transactions') && p.includes(endISO))).toBe(true)
     })
   })
 })
@@ -473,7 +486,7 @@ describe('TransactionsPage create flow', () => {
     expect(dialog).toBeInTheDocument()
   })
 
-  it('the create form has a type selector, a required account selector, an optional envelope selector (non-transfer), a required amount input, a required date input, and a submit button', async () => {
+  it('the create form has a type selector, a required account selector, an optional envelope selector (non-transfer), a required amount field, a required date field, and a submit button', async () => {
     const user = userEvent.setup()
     render(<TransactionsPage />, { wrapper: createWrapper() })
     await user.click(await screen.findByRole('button', { name: 'Новая транзакция' }))
@@ -491,12 +504,11 @@ describe('TransactionsPage create flow', () => {
     expect(envelopeSelect).toBeTruthy()
     expect(envelopeSelect).not.toBeRequired()
 
-    const amountInput = within(dialog).getAllByRole('spinbutton')[0]
+    const amountInput = within(dialog).getByLabelText('Сумма')
     expect(amountInput).toBeRequired()
 
-    const dateInput = dialog.querySelector('input[type="date"]')
-    expect(dateInput).not.toBeNull()
-    expect(dateInput).toBeRequired()
+    const dateField = within(dialog).getByLabelText('Дата')
+    expect(dateField).toBeRequired()
 
     within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
   })
@@ -543,12 +555,11 @@ describe('TransactionsPage create flow', () => {
     const accountSelects = findSelectsWithAnyOptionValue(combos, [accountRub.id, accountSecond.id])
     await user.selectOptions(accountSelects[0], accountRub.id)
 
-    const amountInput = within(dialog).getAllByRole('spinbutton')[0]
+    const amountInput = within(dialog).getByLabelText('Сумма')
     await user.clear(amountInput)
     await user.type(amountInput, '25.50')
 
-    const dateInput = dialog.querySelector('input[type="date"]') as HTMLInputElement
-    fireEvent.change(dateInput, { target: { value: '2024-07-20' } })
+    await pickToday(user, within(dialog).getByLabelText('Дата'))
 
     const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
     await user.click(submitButton)
@@ -561,7 +572,7 @@ describe('TransactionsPage create flow', () => {
     expect(Number.isInteger(b.amount)).toBe(true)
     expect(b.type).toBe('expense')
     expect(b.accountId).toBe(accountRub.id)
-    expect(b.date).toBe('2024-07-20')
+    expect(b.date).toBe(todayISO())
   })
 
   it('submitting a transfer form posts type "transfer" with distinct accountId and toAccountId', async () => {
@@ -589,12 +600,11 @@ describe('TransactionsPage create flow', () => {
 
     await user.selectOptions(destinationSelect as HTMLSelectElement, accountSecond.id)
 
-    const amountInput = within(dialog).getAllByRole('spinbutton')[0]
+    const amountInput = within(dialog).getByLabelText('Сумма')
     await user.clear(amountInput)
     await user.type(amountInput, '100')
 
-    const dateInput = dialog.querySelector('input[type="date"]') as HTMLInputElement
-    fireEvent.change(dateInput, { target: { value: '2024-07-20' } })
+    await pickToday(user, within(dialog).getByLabelText('Дата'))
 
     const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
     await user.click(submitButton)
@@ -619,12 +629,11 @@ describe('TransactionsPage create flow', () => {
     const accountSelects = findSelectsWithAnyOptionValue(combos, [accountRub.id, accountSecond.id])
     await user.selectOptions(accountSelects[0], accountRub.id)
 
-    const amountInput = within(dialog).getAllByRole('spinbutton')[0]
+    const amountInput = within(dialog).getByLabelText('Сумма')
     await user.clear(amountInput)
     await user.type(amountInput, '10')
 
-    const dateInput = dialog.querySelector('input[type="date"]') as HTMLInputElement
-    fireEvent.change(dateInput, { target: { value: '2024-07-20' } })
+    await pickToday(user, within(dialog).getByLabelText('Дата'))
 
     const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
     await user.click(submitButton)
@@ -651,7 +660,9 @@ describe('TransactionsPage edit flow', () => {
     await user.click(screen.getByText(txExpense.note))
 
     const dialog = await screen.findByRole('dialog', { name: 'Изменить транзакцию' })
-    expect(within(dialog).getByDisplayValue(String(fromMinorUnits(txExpense.amount)))).toBeInTheDocument()
+    // AmountField displays the value thousand-grouped, not the raw
+    // "1500" string toPayload/fromMinorUnits deal in.
+    expect(within(dialog).getByLabelText('Сумма')).toHaveValue(formatGroupedNumber(String(fromMinorUnits(txExpense.amount))))
   })
 
   it('submitting the unedited form calls PUT /transactions/{id} (not POST) with amount as integer minor units', async () => {
@@ -682,7 +693,7 @@ describe('TransactionsPage edit flow', () => {
     await user.click(screen.getByText(txExpense.note))
     const dialog = await screen.findByRole('dialog', { name: 'Изменить транзакцию' })
 
-    const amountInput = within(dialog).getAllByRole('spinbutton')[0]
+    const amountInput = within(dialog).getByLabelText('Сумма')
     await user.clear(amountInput)
     await user.type(amountInput, '12.34')
 

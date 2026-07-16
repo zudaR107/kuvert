@@ -829,3 +829,66 @@ describe('AccountsPage toast notifications', () => {
     expect(screen.queryByText(/не удалось создать счёт/i)).not.toBeInTheDocument()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Arrow-key field navigation (handleArrowFieldNavigation wiring)
+//
+// handleArrowFieldNavigation (from @zudar107/schloss-ui) is attached to the
+// <form>'s onKeyDown. These tests only verify kuvert wired it onto this
+// form and that focus actually lands on the expected fields in this form's
+// DOM order — the low-level arrow-key/no-wraparound behavior itself is unit
+// tested inside schloss-ui.
+// ---------------------------------------------------------------------------
+describe('AccountsPage create form arrow-key navigation', () => {
+  beforeEach(() => {
+    mockApiWithAccounts([])
+  })
+
+  it('ArrowDown moves focus Название -> Тип -> Валюта, and ArrowUp moves back to Тип', async () => {
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await user.click(await screen.findByRole('button', { name: 'Новый счёт' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый счёт' })
+
+    const nameField = within(dialog).getByLabelText('Название')
+    const typeSelect = within(dialog).getByLabelText('Тип')
+    const currencyField = within(dialog).getByLabelText('Валюта')
+
+    await user.click(nameField)
+    expect(nameField).toHaveFocus()
+
+    await user.keyboard('{ArrowDown}')
+    expect(typeSelect).toHaveFocus()
+
+    await user.keyboard('{ArrowDown}')
+    expect(currencyField).toHaveFocus()
+
+    await user.keyboard('{ArrowUp}')
+    expect(typeSelect).toHaveFocus()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// AmountField currency prefix follows the sibling "Валюта" field
+// ---------------------------------------------------------------------------
+describe('AccountsPage create form amount prefix follows currency', () => {
+  beforeEach(() => {
+    mockApiWithAccounts([])
+  })
+
+  it('the "Начальный баланс" prefix updates live from "₽" to "$" as the currency field is changed to USD', async () => {
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await user.click(await screen.findByRole('button', { name: 'Новый счёт' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый счёт' })
+
+    expect(within(dialog).getByText('₽')).toBeInTheDocument()
+
+    const currencyField = within(dialog).getByLabelText('Валюта')
+    await user.clear(currencyField)
+    await user.type(currencyField, 'USD')
+
+    expect(within(dialog).getByText('$')).toBeInTheDocument()
+    expect(within(dialog).queryByText('₽')).not.toBeInTheDocument()
+  })
+})

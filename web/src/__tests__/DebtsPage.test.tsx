@@ -123,11 +123,11 @@ function findCounterpartyInput(dialog: HTMLElement): HTMLElement {
   return dialog.querySelector('#debt-counterparty') as HTMLElement
 }
 
-// Finds the required numeric input inside a dialog (the amount field).
-function findRequiredSpinbutton(dialog: HTMLElement): HTMLElement {
-  const spinbuttons = within(dialog).getAllByRole('spinbutton')
-  const required = spinbuttons.find((t) => t.hasAttribute('required'))
-  return required ?? spinbuttons[0]
+// Finds the amount input inside a dialog by id - AmountField renders a
+// type="text" input, so a role-based query can no longer distinguish it
+// from the equally-required debt-currency textbox.
+function findAmountInput(dialog: HTMLElement): HTMLElement {
+  return dialog.querySelector('#debt-amount') as HTMLElement
 }
 
 beforeEach(() => {
@@ -383,7 +383,7 @@ describe('DebtsPage create flow', () => {
     expect(values).toContain('owed')
     expect(values).toContain('owing')
 
-    const amountInput = findRequiredSpinbutton(dialog)
+    const amountInput = findAmountInput(dialog)
     expect(amountInput).toBeRequired()
 
     expect(within(dialog).getByDisplayValue('RUB')).toBeInTheDocument()
@@ -391,15 +391,15 @@ describe('DebtsPage create flow', () => {
     within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
   })
 
-  it('has an optional due-date input of type="date"', async () => {
+  it('has an optional "Срок" date field', async () => {
     const user = userEvent.setup()
     render(<DebtsPage />, { wrapper: createWrapper() })
     await user.click(await screen.findByRole('button', { name: 'Новый долг' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новый долг' })
 
-    const dateInput = dialog.querySelector('input[type="date"]')
-    expect(dateInput).not.toBeNull()
-    expect(dateInput).not.toBeRequired()
+    const dueDateField = within(dialog).getByLabelText('Срок (необязательно)')
+    expect(dueDateField).not.toBeNull()
+    expect(dueDateField).not.toBeRequired()
   })
 
   it('submitting with counterparty and amount posts to /debts with the typed counterparty, selected type, and amount in minor units', async () => {
@@ -415,7 +415,7 @@ describe('DebtsPage create flow', () => {
     const select = within(dialog).getByRole('combobox') as HTMLSelectElement
     await user.selectOptions(select, 'owing')
 
-    const amountInput = findRequiredSpinbutton(dialog)
+    const amountInput = findAmountInput(dialog)
     await user.clear(amountInput)
     await user.type(amountInput, '50.25')
 
@@ -441,7 +441,7 @@ describe('DebtsPage create flow', () => {
 
     const nameInput = findCounterpartyInput(dialog)
     await user.type(nameInput, 'Иван Петров')
-    const amountInput = findRequiredSpinbutton(dialog)
+    const amountInput = findAmountInput(dialog)
     await user.clear(amountInput)
     await user.type(amountInput, '100')
 
@@ -520,7 +520,7 @@ describe('DebtsPage edit flow', () => {
     await user.click(screen.getByText('Иван Петров'))
     const dialog = await screen.findByRole('dialog', { name: 'Изменить долг' })
 
-    const amountInput = findRequiredSpinbutton(dialog)
+    const amountInput = findAmountInput(dialog)
     await user.clear(amountInput)
     await user.type(amountInput, '12.34')
 
@@ -599,5 +599,65 @@ describe('DebtsPage keeps previous list visible while switching filters', () => 
 
     await waitFor(() => expect(screen.getByText('Алексей Смирнов')).toBeInTheDocument())
     expect(screen.queryByText('Иван Петров')).not.toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Arrow-key field navigation (handleArrowFieldNavigation wiring)
+//
+// handleArrowFieldNavigation (from @zudar107/schloss-ui) is attached to the
+// <form>'s onKeyDown. This is a second data point (alongside
+// AccountsPage.test.tsx) confirming kuvert wires it onto its forms and that
+// focus lands on the expected fields in DOM order — the low-level arrow-key
+// behavior itself is unit tested inside schloss-ui.
+// ---------------------------------------------------------------------------
+describe('DebtsPage create form arrow-key navigation', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockResolvedValue([])
+  })
+
+  it('ArrowDown moves focus Контрагент -> Тип -> Сумма', async () => {
+    const user = userEvent.setup()
+    render(<DebtsPage />, { wrapper: createWrapper() })
+    await user.click(await screen.findByRole('button', { name: 'Новый долг' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый долг' })
+
+    const counterpartyField = findCounterpartyInput(dialog)
+    const typeSelect = within(dialog).getByLabelText('Тип')
+    const amountField = findAmountInput(dialog)
+
+    await user.click(counterpartyField)
+    expect(counterpartyField).toHaveFocus()
+
+    await user.keyboard('{ArrowDown}')
+    expect(typeSelect).toHaveFocus()
+
+    await user.keyboard('{ArrowDown}')
+    expect(amountField).toHaveFocus()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// AmountField currency prefix follows the sibling "Валюта" field
+// ---------------------------------------------------------------------------
+describe('DebtsPage create form amount prefix follows currency', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockResolvedValue([])
+  })
+
+  it('the "Сумма" prefix updates live from "₽" to "$" as the currency field is changed to USD', async () => {
+    const user = userEvent.setup()
+    render(<DebtsPage />, { wrapper: createWrapper() })
+    await user.click(await screen.findByRole('button', { name: 'Новый долг' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый долг' })
+
+    expect(within(dialog).getByText('₽')).toBeInTheDocument()
+
+    const currencyField = within(dialog).getByLabelText('Валюта')
+    await user.clear(currencyField)
+    await user.type(currencyField, 'USD')
+
+    expect(within(dialog).getByText('$')).toBeInTheDocument()
+    expect(within(dialog).queryByText('₽')).not.toBeInTheDocument()
   })
 })

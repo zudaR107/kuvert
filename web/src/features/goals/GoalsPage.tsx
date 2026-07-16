@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Target } from 'lucide-react'
-import { EmptyState, ICON_SIZE, Button, Badge, StatTile, Field, Modal, Toast } from '@zudar107/schloss-ui'
+import {
+  EmptyState, ICON_SIZE, Button, Badge, StatTile, Field, DateField, AmountField, NumberField,
+  Modal, Toast, handleArrowFieldNavigation,
+} from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, toMinorUnits, today } from '../../lib/format'
 import { useToast } from '../../hooks/useToast'
@@ -273,6 +276,7 @@ function GoalForm({ formId, onSubmit }: {
         e.preventDefault()
         onSubmit({ ...values, name: values.name.trim() || GOAL_NAME_PLACEHOLDER })
       }}
+      onKeyDown={handleArrowFieldNavigation}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -283,24 +287,19 @@ function GoalForm({ formId, onSubmit }: {
         placeholder={GOAL_NAME_PLACEHOLDER}
       />
 
-      <Field
+      <AmountField
         id="goal-target"
         label="Целевая сумма"
-        type="number"
-        step="0.01"
-        min="0.01"
-        prefix="₽"
         value={values.targetAmount}
-        onChange={(e) => set('targetAmount', e.target.value)}
+        onChange={(v) => set('targetAmount', v)}
         required
       />
 
-      <Field
+      <DateField
         id="goal-deadline"
         label="Срок (необязательно)"
-        type="date"
         value={values.deadline}
-        onChange={(e) => set('deadline', e.target.value)}
+        onChange={(v) => set('deadline', v)}
       />
 
       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
@@ -313,14 +312,13 @@ function GoalForm({ formId, onSubmit }: {
       </label>
 
       {values.recurring && (
-        <Field
+        <NumberField
           id="goal-recurring-day"
           label="День месяца для нового цикла"
-          type="number"
           min="1"
           max="28"
           value={values.recurringDay}
-          onChange={(e) => set('recurringDay', e.target.value)}
+          onChange={(v) => set('recurringDay', v)}
         />
       )}
     </form>
@@ -342,6 +340,7 @@ function ContributionForm({ formId, accounts, onSubmit }: {
     <form
       id={formId}
       onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
+      onKeyDown={handleArrowFieldNavigation}
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -355,24 +354,19 @@ function ContributionForm({ formId, accounts, onSubmit }: {
         {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
       </Field>
 
-      <Field
+      <AmountField
         id="contribution-amount"
         label="Сумма"
-        type="number"
-        step="0.01"
-        min="0.01"
-        prefix="₽"
         value={values.amount}
-        onChange={(e) => set('amount', e.target.value)}
+        onChange={(v) => set('amount', v)}
         required
       />
 
-      <Field
+      <DateField
         id="contribution-date"
         label="Дата"
-        type="date"
         value={values.date}
-        onChange={(e) => set('date', e.target.value)}
+        onChange={(v) => set('date', v)}
         required
       />
 
