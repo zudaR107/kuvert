@@ -675,4 +675,23 @@ describe('BudgetPage allocation affordance', () => {
     expect(input).toBeInTheDocument()
     expect(within(row).queryByRole('button')).not.toBeInTheDocument()
   })
+
+  // Swapping the pill button for the (differently-sized) editing input
+  // used to reflow the whole table - the browser's default "auto" table
+  // layout recomputes column widths from whatever's currently rendered
+  // in each cell, so a wider input in one row shoved every later column
+  // to the right for as long as it was open. Locking the layout to the
+  // header row's widths makes column sizing independent of what any one
+  // row happens to be rendering at the moment.
+  it('the table uses a fixed layout with explicit column widths, so entering/leaving edit mode cannot reflow the columns', async () => {
+    render(<BudgetPage />, { wrapper: createWrapper() })
+    const table = await screen.findByRole('table')
+
+    expect(table).toHaveStyle({ tableLayout: 'fixed' })
+
+    const headers = within(table).getAllByRole('columnheader')
+    const allocatedHeader = headers.find((h) => h.textContent === 'Выделено')
+    expect(allocatedHeader).toBeDefined()
+    expect(allocatedHeader!.style.width).not.toBe('')
+  })
 })
