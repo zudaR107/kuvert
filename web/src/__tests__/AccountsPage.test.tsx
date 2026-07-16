@@ -72,10 +72,20 @@ function createWrapperWithClient() {
 
 // ---------------------------------------------------------------------------
 // Default api.get implementation: routes /accounts and /accounts/{id}/balance
+//
+// The active-tab list request now explicitly includes `?archived=false` (not
+// just a bare `/accounts`), so both forms are accepted here for backward
+// compatibility with tests written before the archive/restore feature.
+// `archivedAccounts` optionally seeds the `?archived=true` branch.
 // ---------------------------------------------------------------------------
-function mockApiWithAccounts(accounts: typeof checkingAccount[], balances: Record<string, number> = {}) {
+function mockApiWithAccounts(
+  accounts: typeof checkingAccount[],
+  balances: Record<string, number> = {},
+  archivedAccounts: typeof checkingAccount[] = [],
+) {
   vi.mocked(api.get).mockImplementation((path: string) => {
-    if (path === '/accounts') return Promise.resolve(accounts)
+    if (path === '/accounts' || path === '/accounts?archived=false') return Promise.resolve(accounts)
+    if (path === '/accounts?archived=true') return Promise.resolve(archivedAccounts)
     const balanceMatch = path.match(/^\/accounts\/(.+)\/balance$/)
     if (balanceMatch) {
       const id = balanceMatch[1]
@@ -254,6 +264,134 @@ describe('AccountsPage archive/delete flow', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Archived tab & restore flow
+// ---------------------------------------------------------------------------
+describe('AccountsPage archived tab and restore flow', () => {
+  it('renders a segmented control with "Активные" and "Архивные" options', async () => {
+    mockApiWithAccounts([checkingAccount])
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Основной счёт')
+
+    expect(screen.getByRole('button', { name: 'Активные' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Архивные' })).toBeInTheDocument()
+  })
+
+  it('fetches the active list via GET /accounts?archived=false by default', async () => {
+    mockApiWithAccounts([checkingAccount])
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Основной счёт')
+
+    expect(vi.mocked(api.get).mock.calls.map((c) => c[0])).toContain('/accounts?archived=false')
+  })
+
+  it('clicking "Архивные" fetches the archived list via GET /accounts?archived=true', async () => {
+    mockApiWithAccounts([checkingAccount], {}, [{ ...cashAccount, name: 'Архивный счёт' }])
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Основной счёт')
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+
+    await screen.findByText('Архивный счёт')
+    expect(vi.mocked(api.get).mock.calls.map((c) => c[0])).toContain('/accounts?archived=true')
+  })
+
+  it('shows a "Восстановить счёт" control instead of "Архивировать счёт" on archived cards', async () => {
+    mockApiWithAccounts([], {}, [checkingAccount])
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByRole('button', { name: 'Новый счёт' })
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+    await screen.findByText('Основной счёт')
+
+    expect(screen.getByRole('button', { name: 'Восстановить счёт' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Архивировать счёт' })).not.toBeInTheDocument()
+  })
+
+  it('does not show an "Изменить" control on archived cards', async () => {
+    mockApiWithAccounts([], {}, [checkingAccount])
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByRole('button', { name: 'Новый счёт' })
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+    await screen.findByText('Основной счёт')
+
+    expect(screen.queryByRole('button', { name: 'Изменить' })).not.toBeInTheDocument()
+  })
+
+  it('clicking "Восстановить счёт" calls POST /accounts/{id}/restore with an empty body', async () => {
+    mockApiWithAccounts([], {}, [checkingAccount])
+    vi.mocked(api.post).mockResolvedValue({ id: 'acc-1', archived: false })
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByRole('button', { name: 'Новый счёт' })
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+    await screen.findByText('Основной счёт')
+
+    await user.click(screen.getByRole('button', { name: 'Восстановить счёт' }))
+
+    expect(api.post).toHaveBeenCalledTimes(1)
+    const [path, body] = vi.mocked(api.post).mock.calls[0]
+    expect(path).toBe('/accounts/acc-1/restore')
+    if (body !== undefined) {
+      expect(Object.keys(body as object)).toHaveLength(0)
+    }
+  })
+
+  it('shows a success toast and removes the item from the archived list after a successful restore', async () => {
+    let archived = [checkingAccount]
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/accounts?archived=true') return Promise.resolve(archived)
+      if (path === '/accounts' || path === '/accounts?archived=false') return Promise.resolve([])
+      const balanceMatch = path.match(/^\/accounts\/(.+)\/balance$/)
+      if (balanceMatch) return Promise.resolve({ balance: 0 })
+      return Promise.reject(new Error(`Unexpected GET ${path}`))
+    })
+    vi.mocked(api.post).mockImplementation(async () => {
+      archived = []
+      return { id: 'acc-1', archived: false }
+    })
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByRole('button', { name: 'Новый счёт' })
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+    await screen.findByText('Основной счёт')
+
+    await user.click(screen.getByRole('button', { name: 'Восстановить счёт' }))
+
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('Счёт восстановлен')
+
+    await vi.waitFor(() => {
+      expect(screen.queryByText('Основной счёт')).not.toBeInTheDocument()
+    })
+  })
+
+  it('shows an empty-state heading "Архивных счетов нет" with no call-to-action button on an empty archived tab', async () => {
+    mockApiWithAccounts([checkingAccount], {}, [])
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Основной счёт')
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+
+    await screen.findByText('Архивных счетов нет')
+
+    // Only the always-present header "Новый счёт" button and the two
+    // segmented-control tab buttons should remain — no extra CTA button
+    // like the active-tab empty state has.
+    const buttons = screen.getAllByRole('button')
+    const buttonNames = buttons.map((b) => b.textContent?.trim())
+    expect(buttonNames.some((n) => /Добавить|Создать счёт/.test(n ?? ''))).toBe(false)
+    expect(buttons.length).toBe(3)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Create flow
 // ---------------------------------------------------------------------------
 describe('AccountsPage create flow', () => {
@@ -413,7 +551,7 @@ describe('AccountsPage create flow — cross-query cache invalidation', () => {
     // queries below). Counting GET /accounts calls avoids that race.
     let accountsCallCount = 0
     vi.mocked(api.get).mockImplementation((path: string) => {
-      if (path === '/accounts') {
+      if (path === '/accounts' || path === '/accounts?archived=false') {
         accountsCallCount += 1
         return Promise.resolve([])
       }

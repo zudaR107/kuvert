@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Wallet, CreditCard, PiggyBank, Landmark, Archive } from 'lucide-react'
-import { EmptyState, ICON_SIZE, Button, Amount, Field, Modal, Toast } from '@zudar107/schloss-ui'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { Plus, Wallet, CreditCard, PiggyBank, Landmark, Archive, ArchiveRestore } from 'lucide-react'
+import { EmptyState, ICON_SIZE, Button, SegmentedControl, Amount, Field, Modal, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, toMinorUnits, fromMinorUnits } from '../../lib/format'
 import { useToast } from '../../hooks/useToast'
@@ -52,10 +52,12 @@ export function AccountsPage() {
   const toast = useToast()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Account | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   const { data: accounts = [], isLoading } = useQuery<Account[]>({
-    queryKey: ['accounts'],
-    queryFn: () => api.get('/accounts'),
+    queryKey: ['accounts', showArchived],
+    queryFn: () => api.get(`/accounts?archived=${showArchived}`),
+    placeholderData: keepPreviousData,
   })
 
   const createMutation = useMutation({
@@ -96,6 +98,15 @@ export function AccountsPage() {
     onError: () => toast.showError('Не удалось архивировать счёт'),
   })
 
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/accounts/${id}/restore`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      toast.showSuccess('Счёт восстановлен')
+    },
+    onError: () => toast.showError('Не удалось восстановить счёт'),
+  })
+
   function openCreate() {
     setEditing(null)
     setModalOpen(true)
@@ -134,25 +145,42 @@ export function AccountsPage() {
         </Button>
       </div>
 
+      <div style={{ marginBottom: '1rem' }}>
+        <SegmentedControl
+          options={[
+            { value: 'active', label: 'Активные' },
+            { value: 'archived', label: 'Архивные' },
+          ]}
+          value={showArchived ? 'archived' : 'active'}
+          onChange={(v) => setShowArchived(v === 'archived')}
+        />
+      </div>
+
       {isLoading ? (
         <SkeletonGrid />
       ) : accounts.length === 0 ? (
-        <EmptyState
-          icon={<Landmark size={ICON_SIZE.illustrative} strokeWidth={2} />}
-          title="Счетов пока нет"
-          description="Счёт — это реальные деньги: карта, кошелёк, вклад. Категории расходов — в «Бюджете»."
-          actionLabel="Добавить счёт"
-          actionIcon={<Plus size={16} />}
-          onAction={openCreate}
-        />
+        showArchived ? (
+          <ArchivedEmptyState />
+        ) : (
+          <EmptyState
+            icon={<Landmark size={ICON_SIZE.illustrative} strokeWidth={2} />}
+            title="Счетов пока нет"
+            description="Счёт — это реальные деньги: карта, кошелёк, вклад. Категории расходов — в «Бюджете»."
+            actionLabel="Добавить счёт"
+            actionIcon={<Plus size={16} />}
+            onAction={openCreate}
+          />
+        )
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
           {accounts.map((a) => (
             <AccountCard
               key={a.id}
               account={a}
+              archived={showArchived}
               onEdit={() => openEdit(a)}
               onArchive={() => archiveMutation.mutate(a.id)}
+              onRestore={() => restoreMutation.mutate(a.id)}
             />
           ))}
         </div>
@@ -216,7 +244,13 @@ function toUpdatePayload(values: AccountFormValues) {
   return { name, type, currency, color }
 }
 
-function AccountCard({ account, onEdit, onArchive }: { account: Account; onEdit: () => void; onArchive: () => void }) {
+function AccountCard({ account, archived, onEdit, onArchive, onRestore }: {
+  account: Account
+  archived: boolean
+  onEdit: () => void
+  onArchive: () => void
+  onRestore: () => void
+}) {
   const { data } = useQuery<{ balance: number }>({
     queryKey: ['accountBalance', account.id],
     queryFn: () => api.get(`/accounts/${account.id}/balance`),
@@ -241,14 +275,25 @@ function AccountCard({ account, onEdit, onArchive }: { account: Account; onEdit:
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{TYPE_LABELS[account.type]}</div>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          style={{ padding: '0.3rem', border: 'none' }}
-          onClick={onArchive}
-          aria-label="Архивировать счёт"
-        >
-          <Archive size={15} />
-        </Button>
+        {archived ? (
+          <Button
+            variant="ghost"
+            style={{ padding: '0.3rem', border: 'none' }}
+            onClick={onRestore}
+            aria-label="Восстановить счёт"
+          >
+            <ArchiveRestore size={15} />
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            style={{ padding: '0.3rem', border: 'none' }}
+            onClick={onArchive}
+            aria-label="Архивировать счёт"
+          >
+            <Archive size={15} />
+          </Button>
+        )}
       </div>
 
       <div style={{ fontSize: '1.375rem', fontWeight: 700, marginBottom: '0.75rem' }}>
@@ -257,9 +302,29 @@ function AccountCard({ account, onEdit, onArchive }: { account: Account; onEdit:
         ) : '…'}
       </div>
 
-      <Button variant="ghost" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8125rem', border: 'none' }} onClick={onEdit}>
-        Изменить
-      </Button>
+      {!archived && (
+        <Button variant="ghost" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8125rem', border: 'none' }} onClick={onEdit}>
+          Изменить
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function ArchivedEmptyState() {
+  return (
+    <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+      <div style={{
+        width: 52, height: 52, borderRadius: 14,
+        background: 'var(--bg-base)', color: 'var(--text-muted)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        margin: '0 auto 1rem',
+      }}>
+        <Landmark size={ICON_SIZE.illustrative} strokeWidth={2} />
+      </div>
+      <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 600 }}>
+        Архивных счетов нет
+      </h2>
     </div>
   )
 }

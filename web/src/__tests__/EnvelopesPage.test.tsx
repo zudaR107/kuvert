@@ -67,13 +67,20 @@ function createWrapper() {
 
 // ---------------------------------------------------------------------------
 // Default api.get implementation: routes /envelopes and /envelopes/categories
+//
+// The active-tab list request now explicitly includes `?archived=false` (not
+// just a bare `/envelopes`), so both forms are accepted here for backward
+// compatibility with tests written before the archive/restore feature.
+// `archivedEnvelopes` optionally seeds the `?archived=true` branch.
 // ---------------------------------------------------------------------------
 function mockApiWithEnvelopes(
   envelopes: EnvelopeFixture[],
   categories: typeof essentialsCategory[] = [],
+  archivedEnvelopes: EnvelopeFixture[] = [],
 ) {
   vi.mocked(api.get).mockImplementation((path: string) => {
-    if (path === '/envelopes') return Promise.resolve(envelopes)
+    if (path === '/envelopes' || path === '/envelopes?archived=false') return Promise.resolve(envelopes)
+    if (path === '/envelopes?archived=true') return Promise.resolve(archivedEnvelopes)
     if (path === '/envelopes/categories') return Promise.resolve(categories)
     return Promise.reject(new Error(`Unexpected GET ${path}`))
   })
@@ -263,6 +270,133 @@ describe('EnvelopesPage archive flow', () => {
     await user.click(archiveButtons[0])
 
     expect(api.delete).toHaveBeenCalledWith('/envelopes/env-1')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Archived tab & restore flow
+// ---------------------------------------------------------------------------
+describe('EnvelopesPage archived tab and restore flow', () => {
+  it('renders a segmented control with "Активные" and "Архивные" options', async () => {
+    mockApiWithEnvelopes([groceriesEnvelope])
+    render(<EnvelopesPage />, { wrapper: createWrapper() })
+    await screen.findByText('Продукты')
+
+    expect(screen.getByRole('button', { name: 'Активные' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Архивные' })).toBeInTheDocument()
+  })
+
+  it('fetches the active list via GET /envelopes?archived=false by default', async () => {
+    mockApiWithEnvelopes([groceriesEnvelope])
+    render(<EnvelopesPage />, { wrapper: createWrapper() })
+    await screen.findByText('Продукты')
+
+    expect(vi.mocked(api.get).mock.calls.map((c) => c[0])).toContain('/envelopes?archived=false')
+  })
+
+  it('clicking "Архивные" fetches the archived list via GET /envelopes?archived=true', async () => {
+    mockApiWithEnvelopes([groceriesEnvelope], [], [{ ...transportEnvelope, name: 'Архивный конверт' }])
+    const user = userEvent.setup()
+    render(<EnvelopesPage />, { wrapper: createWrapper() })
+    await screen.findByText('Продукты')
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+
+    await screen.findByText('Архивный конверт')
+    expect(vi.mocked(api.get).mock.calls.map((c) => c[0])).toContain('/envelopes?archived=true')
+  })
+
+  it('shows a "Восстановить" control instead of an "Архивировать" control on archived cards', async () => {
+    mockApiWithEnvelopes([], [], [groceriesEnvelope])
+    const user = userEvent.setup()
+    render(<EnvelopesPage />, { wrapper: createWrapper() })
+    await screen.findByRole('button', { name: 'Новый конверт' })
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+    await screen.findByText('Продукты')
+
+    expect(screen.getByRole('button', { name: /Восстановить/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Архивировать/ })).not.toBeInTheDocument()
+  })
+
+  it('does not show an "Изменить" control on archived cards', async () => {
+    mockApiWithEnvelopes([], [], [groceriesEnvelope])
+    const user = userEvent.setup()
+    render(<EnvelopesPage />, { wrapper: createWrapper() })
+    await screen.findByRole('button', { name: 'Новый конверт' })
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+    await screen.findByText('Продукты')
+
+    expect(screen.queryByRole('button', { name: 'Изменить' })).not.toBeInTheDocument()
+  })
+
+  it('clicking "Восстановить" calls POST /envelopes/{id}/restore with an empty body', async () => {
+    mockApiWithEnvelopes([], [], [groceriesEnvelope])
+    vi.mocked(api.post).mockResolvedValue({ id: 'env-1', archived: false })
+    const user = userEvent.setup()
+    render(<EnvelopesPage />, { wrapper: createWrapper() })
+    await screen.findByRole('button', { name: 'Новый конверт' })
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+    await screen.findByText('Продукты')
+
+    await user.click(screen.getByRole('button', { name: /Восстановить/ }))
+
+    expect(api.post).toHaveBeenCalledTimes(1)
+    const [path, body] = vi.mocked(api.post).mock.calls[0]
+    expect(path).toBe('/envelopes/env-1/restore')
+    if (body !== undefined) {
+      expect(Object.keys(body as object)).toHaveLength(0)
+    }
+  })
+
+  it('shows a success toast and removes the item from the archived list after a successful restore', async () => {
+    let archived: EnvelopeFixture[] = [groceriesEnvelope]
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/envelopes?archived=true') return Promise.resolve(archived)
+      if (path === '/envelopes' || path === '/envelopes?archived=false') return Promise.resolve([])
+      if (path === '/envelopes/categories') return Promise.resolve([])
+      return Promise.reject(new Error(`Unexpected GET ${path}`))
+    })
+    vi.mocked(api.post).mockImplementation(async () => {
+      archived = []
+      return { id: 'env-1', archived: false }
+    })
+    const user = userEvent.setup()
+    render(<EnvelopesPage />, { wrapper: createWrapper() })
+    await screen.findByRole('button', { name: 'Новый конверт' })
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+    await screen.findByText('Продукты')
+
+    await user.click(screen.getByRole('button', { name: /Восстановить/ }))
+
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('Конверт восстановлен')
+
+    await vi.waitFor(() => {
+      expect(screen.queryByText('Продукты')).not.toBeInTheDocument()
+    })
+  })
+
+  it('shows an empty-state heading "Архивных конвертов нет" with no call-to-action button on an empty archived tab', async () => {
+    mockApiWithEnvelopes([groceriesEnvelope], [], [])
+    const user = userEvent.setup()
+    render(<EnvelopesPage />, { wrapper: createWrapper() })
+    await screen.findByText('Продукты')
+
+    await user.click(screen.getByRole('button', { name: 'Архивные' }))
+
+    await screen.findByText('Архивных конвертов нет')
+
+    // Only the always-present header "Новый конверт" button and the two
+    // segmented-control tab buttons should remain — no extra CTA button
+    // like the active-tab empty state has.
+    const buttons = screen.getAllByRole('button')
+    const buttonNames = buttons.map((b) => b.textContent?.trim())
+    expect(buttonNames.some((n) => /Добавить|Создать конверт/.test(n ?? ''))).toBe(false)
+    expect(buttons.length).toBe(3)
   })
 })
 

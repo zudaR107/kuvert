@@ -183,6 +183,74 @@ describe('DELETE /accounts/:id', () => {
   })
 })
 
+// ── Archived accounts & restore ───────────────────────────────────────
+describe('GET /accounts?archived=true', () => {
+  it('returns only archived accounts, disjoint from the default (unarchived) list', async () => {
+    const active = await (await post('/accounts', { name: 'Active' })).json() as any
+    const toArchive = await (await post('/accounts', { name: 'ToArchive' })).json() as any
+    await del(`/accounts/${toArchive.id}`)
+
+    const archivedList = await (await get('/accounts?archived=true')).json() as any[]
+    expect(archivedList).toHaveLength(1)
+    expect(archivedList[0]!.id).toBe(toArchive.id)
+    expect(archivedList[0]!.archived).toBe(true)
+
+    const activeList = await (await get('/accounts')).json() as any[]
+    expect(activeList).toHaveLength(1)
+    expect(activeList[0]!.id).toBe(active.id)
+
+    const archivedIds = archivedList.map((a: any) => a.id)
+    const activeIds = activeList.map((a: any) => a.id)
+    expect(archivedIds.some((id: string) => activeIds.includes(id))).toBe(false)
+  })
+
+  it('returns an empty array when there are no archived accounts', async () => {
+    await post('/accounts', { name: 'StillActive' })
+    const res = await get('/accounts?archived=true')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([])
+  })
+})
+
+describe('POST /accounts/:id/restore', () => {
+  it('restores an archived account, returning it with archived: false', async () => {
+    const acct = await (await post('/accounts', { name: 'ToRestore' })).json() as any
+    await del(`/accounts/${acct.id}`)
+
+    const res = await app.request(`/accounts/${acct.id}/restore`, { method: 'POST', headers: H1 })
+    expect(res.status).toBe(200)
+    const body = await res.json() as any
+    expect(body.id).toBe(acct.id)
+    expect(body.archived).toBe(false)
+  })
+
+  it('returns 404 with { error: "Not found" } for an unknown id', async () => {
+    const res = await app.request('/accounts/nonexistent/restore', { method: 'POST', headers: H1 })
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'Not found' })
+  })
+
+  it('is a harmless no-op (still 200, archived: false) when the account is already active', async () => {
+    const acct = await (await post('/accounts', { name: 'AlreadyActive' })).json() as any
+    const res = await app.request(`/accounts/${acct.id}/restore`, { method: 'POST', headers: H1 })
+    expect(res.status).toBe(200)
+    const body = await res.json() as any
+    expect(body.archived).toBe(false)
+  })
+
+  it('restored account reappears in default GET /accounts and disappears from ?archived=true', async () => {
+    const acct = await (await post('/accounts', { name: 'RoundTrip' })).json() as any
+    await del(`/accounts/${acct.id}`)
+    await app.request(`/accounts/${acct.id}/restore`, { method: 'POST', headers: H1 })
+
+    const activeList = await (await get('/accounts')).json() as any[]
+    expect(activeList.find((a: any) => a.id === acct.id)).toBeDefined()
+
+    const archivedList = await (await get('/accounts?archived=true')).json() as any[]
+    expect(archivedList.find((a: any) => a.id === acct.id)).toBeUndefined()
+  })
+})
+
 // ── Balance ────────────────────────────────────────────────────────
 describe('GET /accounts/:id/balance', () => {
   it('returns initialBalance when no transactions', async () => {
