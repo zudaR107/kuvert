@@ -105,8 +105,9 @@ describe('Header user area when a user is present', () => {
     expect(avatar).toHaveTextContent('J')
   })
 
-  it("navigates to schlussel's unified account settings when the settings button is clicked", async () => {
-    // The header's gear icon opens the platform-wide account settings
+  it("navigates to schlussel's unified account settings when the avatar is clicked", async () => {
+    // There is no separate gear icon anymore - the avatar itself is the
+    // settings entry point, opening the platform-wide account settings
     // page hosted on schlussel (password, delete account, ...), not
     // kuvert's own /settings route - that stays reachable from the
     // sidebar for service-specific preferences (currency).
@@ -114,7 +115,7 @@ describe('Header user area when a user is present', () => {
     const user = userEvent.setup()
     const { header } = await renderLayout(mockUser)
 
-    await user.click(within(header).getByRole('button', { name: 'Настройки' }))
+    await user.click(within(header).getByRole('button', { name: 'Настройки аккаунта' }))
 
     expect(window.location.href).toContain('/account')
     expect(window.location.href).toContain('return_to=')
@@ -160,7 +161,7 @@ describe('Header user area when there is no user', () => {
     const { header } = await renderLayout(null)
 
     expect(within(header).queryByRole('button', { name: /Выйти/ })).not.toBeInTheDocument()
-    expect(within(header).queryByRole('button', { name: 'Настройки' })).not.toBeInTheDocument()
+    expect(within(header).queryByRole('button', { name: 'Настройки аккаунта' })).not.toBeInTheDocument()
     expect(within(header).queryByText('Jane Doe')).not.toBeInTheDocument()
     expect(within(header).queryByTitle('Jane Doe')).not.toBeInTheDocument()
   })

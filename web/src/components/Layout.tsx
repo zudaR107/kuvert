@@ -2,13 +2,12 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   LayoutDashboard, Mail, Receipt, Target, CreditCard, Wallet, Settings,
-  LogOut, Sun, Moon, Monitor, Coffee, X
+  LogOut, X
 } from 'lucide-react'
-import { Toast } from '@zudar107/schloss-ui'
+import { Toast, ThemeToggle } from '@zudar107/schloss-ui'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
-import { type Theme, THEMES, getStoredTheme, applyTheme } from '../lib/theme'
-import { buildSchluesselLogoutUrl } from '../lib/authRedirect'
+import { buildSchluesselLogoutUrl, buildSchluesselAccountUrl } from '../lib/authRedirect'
 import { Footer } from './Footer'
 import { Header } from './Header'
 
@@ -39,19 +38,11 @@ const NAV_ITEMS = [
   { to: '/settings',     icon: <Settings size={18} />,        label: 'Настройки' },
 ]
 
-const THEME_ICONS: Record<Theme, React.ReactNode> = {
-  light: <Sun size={15} />,
-  dark:  <Moon size={15} />,
-  oled:  <Monitor size={15} />,
-  sepia: <Coffee size={15} />,
-}
-
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth()
   const toast = useToast()
   const { pathname } = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [theme, setTheme] = useState<Theme>(getStoredTheme)
   const [collapsed, setCollapsed] = useState(false)
   const [expandedWidth, setExpandedWidth] = useState(getStoredSidebarWidth)
   const [dragging, setDragging] = useState(false)
@@ -64,13 +55,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // true for the rest of this tick whenever a real drag happened; the
   // click-to-toggle handler checks and ignores it.
   const suppressNextClickRef = useRef(false)
-
-  function cycleTheme() {
-    const idx = THEMES.indexOf(theme)
-    const next = THEMES[(idx + 1) % THEMES.length] as Theme
-    setTheme(next)
-    applyTheme(next)
-  }
 
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_WIDTH : expandedWidth
 
@@ -252,11 +236,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div style={{ padding: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 2 }}>
           {user && (
             <div
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                window.location.href = buildSchluesselAccountUrl(window.location.pathname)
+              }}
+              title="Настройки аккаунта"
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.625rem',
                 padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',
                 marginBottom: 4,
+                cursor: 'pointer', borderRadius: 8,
               }}
             >
               <div style={{
@@ -285,21 +274,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
               )}
             </div>
           )}
-          <button
-            onClick={(e) => { e.stopPropagation(); cycleTheme() }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '0.625rem',
-              padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',
-              borderRadius: 8, border: 'none', cursor: 'pointer',
-              background: 'transparent', color: 'var(--sidebar-text)',
-              fontSize: '0.8125rem', transition: 'background 150ms',
-              justifyContent: collapsed ? 'center' : 'flex-start',
-              width: '100%',
-            }}
-          >
-            {THEME_ICONS[theme]}
-            {!collapsed && <span>Тема: {theme}</span>}
-          </button>
+          <ThemeToggle
+            align="left"
+            trigger={({ icon, onClick }) => (
+              <button
+                onClick={(e) => { e.stopPropagation(); onClick() }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.625rem',
+                  padding: collapsed ? '0.5rem' : '0.5rem 0.75rem',
+                  borderRadius: 8, border: 'none', cursor: 'pointer',
+                  background: 'transparent', color: 'var(--sidebar-text)',
+                  fontSize: '0.8125rem', transition: 'background 150ms',
+                  justifyContent: collapsed ? 'center' : 'flex-start',
+                  width: '100%',
+                }}
+              >
+                {icon}
+                {!collapsed && <span>Тема</span>}
+              </button>
+            )}
+          />
           {user && (
             <button
               onClick={async (e) => { e.stopPropagation(); await handleLogout() }}

@@ -5,7 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { AuthContext, useAuthProvider } from './hooks/useAuth'
 import { router } from './router'
 import { queryClient } from './lib/queryClient'
-import { applyTheme, getStoredTheme } from './lib/theme'
+import { applyTheme, getStoredTheme } from '@zudar107/schloss-ui'
 import './index.css'
 
 applyTheme(getStoredTheme())
