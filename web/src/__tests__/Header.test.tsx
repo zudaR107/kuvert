@@ -5,14 +5,14 @@ import type { AuthUser } from '../hooks/useAuth'
 
 // ---------------------------------------------------------------------------
 // Mock TanStack Router — same pattern as Layout.test.tsx / sidebarResize.test.tsx.
-// useNavigate is captured (not just stubbed) so the settings-button test
-// below can assert it was actually called - the shared Header calls
-// onSettings via a plain callback now, not a router <Link href>.
+// Header itself no longer calls useNavigate (settings now navigates via a
+// full window.location.href change, to schlussel's account page - a
+// different origin, not a client-side route), but Layout's own sidebar
+// still renders via <Link>, so the module mock is kept for that.
 // ---------------------------------------------------------------------------
-const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
   useLocation: () => ({ pathname: '/budget' }),
-  useNavigate: () => mockNavigate,
+  useNavigate: () => vi.fn(),
   Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
     <a href={to} {...rest}>{children}</a>
   ),
@@ -69,7 +69,6 @@ function stubLocation() {
 afterEach(() => {
   cleanup()
   vi.unstubAllEnvs()
-  mockNavigate.mockClear()
 })
 
 describe('Header home link', () => {
@@ -106,16 +105,20 @@ describe('Header user area when a user is present', () => {
     expect(avatar).toHaveTextContent('J')
   })
 
-  it('calls navigate to /settings when the settings button is clicked', async () => {
-    // The shared Header wires settings through an onSettings callback
-    // (a button), not a router <Link href="/settings"> - a real
-    // interaction-mechanism change, not just a mechanical test fix.
+  it("navigates to schlussel's unified account settings when the settings button is clicked", async () => {
+    // The header's gear icon opens the platform-wide account settings
+    // page hosted on schlussel (password, delete account, ...), not
+    // kuvert's own /settings route - that stays reachable from the
+    // sidebar for service-specific preferences (currency).
+    const restore = stubLocation()
     const user = userEvent.setup()
     const { header } = await renderLayout(mockUser)
 
     await user.click(within(header).getByRole('button', { name: 'Настройки' }))
 
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/settings' })
+    expect(window.location.href).toContain('/account')
+    expect(window.location.href).toContain('return_to=')
+    restore()
   })
 
   it("renders a logout button that calls logout() and then redirects to schlussel's /logout page", async () => {
