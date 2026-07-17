@@ -1,6 +1,6 @@
 import { Menu } from 'lucide-react'
-import { useNavigate } from '@tanstack/react-router'
 import { Header as SharedHeader } from '@zudar107/schloss-ui'
+import { buildSchluesselAccountUrl } from '../lib/authRedirect'
 import type { AuthUser } from '../hooks/useAuth'
 
 // Where "На главную" links back to (schloss) - separate from
@@ -19,8 +19,6 @@ interface HeaderProps {
 // entirely below the mobile breakpoint. This sits alongside the sidebar's
 // own controls rather than replacing them.
 export function Header({ user, onLogout, onOpenMobileMenu }: HeaderProps) {
-  const navigate = useNavigate()
-
   return (
     <SharedHeader
       // The home link leads to schloss (kuvert has no home page of its
@@ -36,7 +34,11 @@ export function Header({ user, onLogout, onOpenMobileMenu }: HeaderProps) {
       homeHref={SCHLOSS_URL}
       homeTitle="На главную"
       user={user}
-      onSettings={() => { void navigate({ to: '/settings' }) }}
+      // The header's gear icon opens the platform-wide account settings
+      // hosted on schlussel (password, delete account, ...) - NOT
+      // kuvert's own /settings route, which is service-specific
+      // preferences (currency) and stays reachable from the sidebar.
+      onSettings={() => { window.location.href = buildSchluesselAccountUrl(window.location.pathname) }}
       onLogout={onLogout}
       leftSlot={
         <button

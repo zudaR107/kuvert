@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { buildSchluesselLoginUrl, buildSchluesselLogoutUrl, CODE_VERIFIER_STORAGE_KEY } from '../lib/authRedirect'
+import { buildSchluesselLoginUrl, buildSchluesselLogoutUrl, buildSchluesselAccountUrl, CODE_VERIFIER_STORAGE_KEY } from '../lib/authRedirect'
 
 beforeEach(() => {
   sessionStorage.clear()
@@ -127,6 +127,61 @@ describe('buildSchluesselLogoutUrl', () => {
   it('is synchronous and returns a plain string, not a Promise', () => {
     vi.stubEnv('VITE_SCHLUSSEL_URL', 'http://localhost:4001')
     const result = buildSchluesselLogoutUrl('https://kuvert.test/budget')
+
+    expect(result).not.toBeInstanceOf(Promise)
+    expect(typeof result).toBe('string')
+  })
+})
+
+describe('buildSchluesselAccountUrl', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('points at the schlussel account page', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', 'https://schlussel.example.com')
+    const url = buildSchluesselAccountUrl('/budget', 'http://localhost:5174')
+    expect(url.startsWith('https://schlussel.example.com/account?')).toBe(true)
+  })
+
+  it('falls back to http://localhost:4001 when VITE_SCHLUSSEL_URL is unset', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', undefined)
+    const url = buildSchluesselAccountUrl('/budget', 'http://localhost:5174')
+    expect(url.startsWith('http://localhost:4001/account?')).toBe(true)
+  })
+
+  it('encodes return_to as the given origin plus the given path', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', 'http://localhost:4001')
+    const url = buildSchluesselAccountUrl('/transactions?foo=bar', 'https://kuvert.example.com')
+
+    const params = new URLSearchParams(url.split('?')[1])
+    expect(params.get('return_to')).toBe('https://kuvert.example.com/transactions?foo=bar')
+  })
+
+  it('defaults origin to window.location.origin when omitted', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', 'http://localhost:4001')
+    const restore = stubLocation('https://kuvert.example.com')
+
+    const url = buildSchluesselAccountUrl('/goals')
+    const params = new URLSearchParams(url.split('?')[1])
+    expect(params.get('return_to')).toBe('https://kuvert.example.com/goals')
+
+    restore()
+  })
+
+  it('does not touch sessionStorage or generate a PKCE code_verifier', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', 'http://localhost:4001')
+    expect(sessionStorage.getItem(CODE_VERIFIER_STORAGE_KEY)).toBeNull()
+
+    buildSchluesselAccountUrl('/budget', 'http://localhost:5174')
+
+    expect(sessionStorage.getItem(CODE_VERIFIER_STORAGE_KEY)).toBeNull()
+    expect(sessionStorage.length).toBe(0)
+  })
+
+  it('is synchronous and returns a plain string, not a Promise', () => {
+    vi.stubEnv('VITE_SCHLUSSEL_URL', 'http://localhost:4001')
+    const result = buildSchluesselAccountUrl('/budget', 'http://localhost:5174')
 
     expect(result).not.toBeInstanceOf(Promise)
     expect(typeof result).toBe('string')

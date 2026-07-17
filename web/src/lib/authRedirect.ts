@@ -39,3 +39,17 @@ export function buildSchluesselLogoutUrl(returnTo: string = `${window.location.o
   const schluesselUrl = import.meta.env.VITE_SCHLUSSEL_URL ?? DEFAULT_SCHLUSSEL_URL
   return `${schluesselUrl}/logout?return_to=${encodeURIComponent(returnTo)}`
 }
+
+// Account settings (password, delete account, ...) are unified across the
+// whole platform, not a per-service concept - kuvert has no account page
+// of its own, same reasoning as having no login page of its own. The
+// header's settings button sends the browser to schlussel's hosted
+// account page instead of a local route; return_to lets that page offer
+// a "back to kuvert" link once the visitor is done. No PKCE needed here
+// (unlike login) - this is a plain link, not a redirect that has to hand
+// a token back across the origin boundary.
+export function buildSchluesselAccountUrl(currentPath: string, origin: string = window.location.origin): string {
+  const schluesselUrl = import.meta.env.VITE_SCHLUSSEL_URL ?? DEFAULT_SCHLUSSEL_URL
+  const returnTo = `${origin}${currentPath}`
+  return `${schluesselUrl}/account?return_to=${encodeURIComponent(returnTo)}`
+}
