@@ -212,16 +212,21 @@ describe('sidebar click-to-toggle', () => {
     expect(widthPx(sidebar)).toBe(initialWidth)
   })
 
-  it('clicking the theme-cycle button does not toggle the sidebar (and still cycles the theme)', () => {
+  it('clicking the theme button does not toggle the sidebar (and opens the theme dropdown instead of cycling directly)', () => {
     const { sidebar } = renderLayout()
     const initialWidth = widthPx(sidebar)
-    const themeBtn = within(sidebar).getByText(/^Тема:/).closest('button') as HTMLElement
-    const labelBefore = themeBtn.textContent
+    const themeBtn = within(sidebar).getByText('Тема').closest('button') as HTMLElement
 
+    // The shared ThemeToggle dropdown replaced the old cycle-on-click
+    // button - clicking it now opens a menu of all 4 themes instead of
+    // silently jumping to the next one.
+    expect(within(sidebar).queryByText('Тёмная')).not.toBeInTheDocument()
     fireEvent.click(themeBtn)
 
     expect(widthPx(sidebar)).toBe(initialWidth)
-    expect(themeBtn.textContent).not.toBe(labelBefore) // theme still cycled
+    expect(within(sidebar).getByText('Тёмная')).toBeInTheDocument()
+    expect(within(sidebar).getByText('OLED')).toBeInTheDocument()
+    expect(within(sidebar).getByText('Сепия')).toBeInTheDocument()
   })
 
   it('clicking the logout button does not toggle the sidebar', () => {
