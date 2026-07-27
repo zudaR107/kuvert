@@ -157,6 +157,8 @@ fit best; add a new section if none fits.
 - Added an admin-only OpenAPI spec (GET /openapi.json, gated behind a new
   requireAdmin middleware) and a Swagger UI viewer at /docs in the web
   app, fed by the same schema-derived document.
+- Added the OpenAPI docs viewer to the README's feature list, and an
+  "Updated docs" line to the PR checklist template.
 
 ## Polish
 - Distinct favicon and a fixed browser tab title (was still the literal
