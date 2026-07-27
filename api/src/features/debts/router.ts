@@ -10,7 +10,7 @@ import { requireAuth } from '../../middleware/auth.js'
 const router = new Hono()
 router.use('*', requireAuth)
 
-const debtSchema = z.object({
+export const debtSchema = z.object({
   counterparty: z.string().min(1).max(100),
   type: z.enum(['owed', 'owing']),
   amount: z.number().int().positive(),

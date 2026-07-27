@@ -8,6 +8,7 @@ import { AccountsPage } from '../features/accounts/AccountsPage'
 import { DebtsPage } from '../features/debts/DebtsPage'
 import { TransactionsPage } from '../features/transactions/TransactionsPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
+import { DocsPage } from '../features/docs/DocsPage'
 import { AuthCallbackPage } from '../features/auth/AuthCallbackPage'
 import { getAccessToken, api } from '../lib/api'
 import { buildSchluesselLoginUrl } from '../lib/authRedirect'
@@ -146,6 +147,15 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 })
 
+// Role-gated inside DocsPage itself, not here - the current user's role
+// only lives in useAuth()'s React state (populated asynchronously), which
+// a beforeLoad running before that state exists can't check synchronously.
+const docsRoute = createRoute({
+  getParentRoute: () => protectedLayout,
+  path: '/docs',
+  component: DocsPage,
+})
+
 const routeTree = rootRoute.addChildren([
   authCallbackRoute,
   protectedLayout.addChildren([
@@ -157,6 +167,7 @@ const routeTree = rootRoute.addChildren([
     debtsRoute,
     accountsRoute,
     settingsRoute,
+    docsRoute,
   ]),
 ])
 

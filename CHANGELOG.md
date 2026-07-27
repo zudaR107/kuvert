@@ -154,6 +154,9 @@ fit best; add a new section if none fits.
 - README, AGPL-3.0 LICENSE, CONTRIBUTING.md.
 - Added CODE_OF_CONDUCT.md, SECURITY.md, issue templates, and a pull
   request template.
+- Added an admin-only OpenAPI spec (GET /openapi.json, gated behind a new
+  requireAdmin middleware) and a Swagger UI viewer at /docs in the web
+  app, fed by the same schema-derived document.
 
 ## Polish
 - Distinct favicon and a fixed browser tab title (was still the literal

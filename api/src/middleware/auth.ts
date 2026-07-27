@@ -22,6 +22,17 @@ declare module 'hono' {
   }
 }
 
+// Composed after requireAuth (which already verified the JWT and set
+// `c.get('user')`) - just reads the role that's already there, since
+// schlussel embeds it directly in the token claim.
+export const requireAdmin = createMiddleware(async (c, next) => {
+  const user = c.get('user')
+  if (user.role !== 'admin') {
+    return c.json({ error: 'Forbidden' }, 403)
+  }
+  await next()
+})
+
 export const requireAuth = createMiddleware(async (c, next) => {
   const authHeader = c.req.header('Authorization')
   if (!authHeader?.startsWith('Bearer ')) {

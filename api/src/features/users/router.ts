@@ -9,7 +9,7 @@ import { requireAuth } from '../../middleware/auth.js'
 const router = new Hono()
 router.use('*', requireAuth)
 
-const updateSchema = z.object({
+export const updateSchema = z.object({
   currency: z.string().length(3),
 })
 
