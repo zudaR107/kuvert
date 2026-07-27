@@ -10,7 +10,7 @@ import { requireAuth } from '../../middleware/auth.js'
 const router = new Hono()
 router.use('*', requireAuth)
 
-const accountSchema = z.object({
+export const accountSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['checking', 'cash', 'credit', 'savings']).default('checking'),
   currency: z.string().length(3).default('RUB'),

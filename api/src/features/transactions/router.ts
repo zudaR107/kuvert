@@ -11,7 +11,7 @@ import { parseCsv } from '../../utils/csv.js'
 const router = new Hono()
 router.use('*', requireAuth)
 
-const txSchema = z.object({
+export const txSchema = z.object({
   accountId: z.string(),
   envelopeId: z.string().nullable().default(null),
   toAccountId: z.string().nullable().default(null),
@@ -21,7 +21,7 @@ const txSchema = z.object({
   note: z.string().max(500).nullable().default(null),
 })
 
-const listQuerySchema = z.object({
+export const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   accountId: z.string().optional(),
@@ -74,7 +74,7 @@ router.post('/', zValidator('json', txSchema), async (c) => {
 // No deduplication against existing transactions yet - re-importing an
 // overlapping date range will create duplicates. Formats/columns can be
 // revisited once real export files need to be matched.
-const importSchema = z.object({
+export const importSchema = z.object({
   accountId: z.string(),
   csv: z.string().min(1),
 })

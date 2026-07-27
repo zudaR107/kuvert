@@ -10,7 +10,7 @@ import { requireAuth } from '../../middleware/auth.js'
 const router = new Hono()
 router.use('*', requireAuth)
 
-const envelopeSchema = z.object({
+export const envelopeSchema = z.object({
   name: z.string().min(1).max(100),
   categoryId: z.string().nullable().default(null),
   icon: z.string().max(50).default('wallet'),
@@ -19,7 +19,7 @@ const envelopeSchema = z.object({
   sortOrder: z.number().int().default(0),
 })
 
-const categorySchema = z.object({
+export const categorySchema = z.object({
   name: z.string().min(1).max(100),
   color: z.string().regex(/^#[0-9a-f]{6}$/i).default('#6366f1'),
   sortOrder: z.number().int().default(0),

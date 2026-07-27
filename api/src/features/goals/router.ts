@@ -10,7 +10,7 @@ import { requireAuth } from '../../middleware/auth.js'
 const router = new Hono()
 router.use('*', requireAuth)
 
-const goalSchema = z.object({
+export const goalSchema = z.object({
   name: z.string().min(1).max(100),
   icon: z.string().max(50).default('target'),
   color: z.string().regex(/^#[0-9a-f]{6}$/i).default('#10b981'),
@@ -20,7 +20,7 @@ const goalSchema = z.object({
   recurringDay: z.number().int().min(1).max(28).nullable().default(null),
 })
 
-const contributionSchema = z.object({
+export const contributionSchema = z.object({
   accountId: z.string(),
   amount: z.number().int().positive(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

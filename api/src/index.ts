@@ -13,6 +13,8 @@ import { transactionsRouter } from './features/transactions/router.js'
 import { goalsRouter } from './features/goals/router.js'
 import { debtsRouter } from './features/debts/router.js'
 import { usersRouter } from './features/users/router.js'
+import { requireAuth, requireAdmin } from './middleware/auth.js'
+import { openApiDocument } from './openapi.js'
 
 // Resolved relative to this file so it works both in dev (src/index.ts,
 // migrations at src/db/migrations) and in the compiled build
@@ -37,6 +39,11 @@ app.use('*', cors({
 }))
 
 app.get('/health', (c) => c.json({ status: 'ok', service: 'Kuvert' }))
+
+// Reached from kuvert/web's own /docs page as /api/openapi.json (the web
+// container's Caddyfile already proxies /api/* here with the prefix
+// stripped) - no new reverse-proxy rule needed.
+app.get('/openapi.json', requireAuth, requireAdmin, (c) => c.json(openApiDocument))
 
 app.route('/accounts', accountsRouter)
 app.route('/periods', periodsRouter)

@@ -10,7 +10,7 @@ import { requireAuth } from '../../middleware/auth.js'
 const router = new Hono()
 router.use('*', requireAuth)
 
-const periodSchema = z.object({
+export const periodSchema = z.object({
   name: z.string().min(1).max(100),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -142,7 +142,7 @@ router.get('/:id/budget', async (c) => {
 })
 
 // PUT /periods/:id/budget/:envelopeId — set allocation
-const allocationSchema = z.object({ allocated: z.number().int().min(0) })
+export const allocationSchema = z.object({ allocated: z.number().int().min(0) })
 
 router.put('/:id/budget/:envelopeId', zValidator('json', allocationSchema), async (c) => {
   const user = c.get('user')
