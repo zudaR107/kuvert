@@ -41,6 +41,8 @@ This repo is a pnpm workspace with two packages:
 - **Goals** — save toward a target with contributions from any account; goals can be
   marked recurring, regenerating a fresh cycle once the target is hit.
 - **Debts** — track money owed to you or by you, independent of the budget itself.
+- **API documentation** — an admin-only OpenAPI spec (`GET /openapi.json`) and a Swagger
+  UI viewer at `/docs` in the web app, generated from the API's own Zod schemas.
 
 ## Local development
 
