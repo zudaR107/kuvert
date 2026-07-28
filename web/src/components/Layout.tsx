@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   LayoutDashboard, Mail, Receipt, Target, CreditCard, Wallet, Settings,
-  LogOut, X, FileCode2
+  LogOut, X, FileCode2, HelpCircle
 } from 'lucide-react'
 import { Toast, ThemeToggle } from '@zudar107/schloss-ui'
 import { useAuth } from '../hooks/useAuth'
@@ -36,6 +36,7 @@ const NAV_ITEMS = [
   { to: '/debts',        icon: <CreditCard size={18} />,      label: 'Долги' },
   { to: '/accounts',     icon: <Wallet size={18} />,          label: 'Счета' },
   { to: '/settings',     icon: <Settings size={18} />,        label: 'Настройки' },
+  { to: '/help',         icon: <HelpCircle size={18} />,      label: 'Справка' },
 ]
 
 // Admin-only, appended rather than baked into NAV_ITEMS - /docs 403s the
