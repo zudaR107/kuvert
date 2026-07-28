@@ -9,6 +9,7 @@ import { DebtsPage } from '../features/debts/DebtsPage'
 import { TransactionsPage } from '../features/transactions/TransactionsPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
 import { DocsPage } from '../features/docs/DocsPage'
+import { HelpPage } from '../features/help/HelpPage'
 import { AuthCallbackPage } from '../features/auth/AuthCallbackPage'
 import { getAccessToken, api } from '../lib/api'
 import { buildSchluesselLoginUrl } from '../lib/authRedirect'
@@ -156,6 +157,12 @@ const docsRoute = createRoute({
   component: DocsPage,
 })
 
+const helpRoute = createRoute({
+  getParentRoute: () => protectedLayout,
+  path: '/help',
+  component: HelpPage,
+})
+
 const routeTree = rootRoute.addChildren([
   authCallbackRoute,
   protectedLayout.addChildren([
@@ -168,6 +175,7 @@ const routeTree = rootRoute.addChildren([
     accountsRoute,
     settingsRoute,
     docsRoute,
+    helpRoute,
   ]),
 ])
 
