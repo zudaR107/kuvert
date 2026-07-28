@@ -575,6 +575,67 @@ describe('TransactionsPage create flow', () => {
     expect(b.date).toBe(todayISO())
   })
 
+  it('rejects an empty amount without ever posting, highlighting the amount field', async () => {
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-tx' })
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper() })
+    await user.click(await screen.findByRole('button', { name: 'Новая транзакция' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новая транзакция' })
+
+    const amountInput = within(dialog).getByLabelText('Сумма')
+    await user.clear(amountInput)
+    await pickToday(user, within(dialog).getByLabelText('Дата'))
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(await within(dialog).findByText('Введите сумму')).toBeInTheDocument()
+    expect(amountInput).toHaveAttribute('aria-invalid', 'true')
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('rejects a zero amount without ever posting', async () => {
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-tx' })
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper() })
+    await user.click(await screen.findByRole('button', { name: 'Новая транзакция' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новая транзакция' })
+
+    const amountInput = within(dialog).getByLabelText('Сумма')
+    await user.clear(amountInput)
+    await user.type(amountInput, '0')
+    await pickToday(user, within(dialog).getByLabelText('Дата'))
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(await within(dialog).findByText('Сумма должна быть больше нуля')).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('submitting a transfer form without a destination account shows an error and does not post', async () => {
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-tx' })
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper() })
+    await user.click(await screen.findByRole('button', { name: 'Новая транзакция' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новая транзакция' })
+
+    const combos = within(dialog).getAllByRole('combobox') as HTMLSelectElement[]
+    const typeSelect = findSelectByOptionValues(combos, ['income', 'expense', 'transfer'])
+    await user.selectOptions(typeSelect as HTMLSelectElement, 'transfer')
+
+    const amountInput = within(dialog).getByLabelText('Сумма')
+    await user.clear(amountInput)
+    await user.type(amountInput, '100')
+    await pickToday(user, within(dialog).getByLabelText('Дата'))
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(await within(dialog).findByText('Выберите счёт назначения')).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
   it('submitting a transfer form posts type "transfer" with distinct accountId and toAccountId', async () => {
     vi.mocked(api.post).mockResolvedValue({ id: 'new-tx' })
     const user = userEvent.setup()

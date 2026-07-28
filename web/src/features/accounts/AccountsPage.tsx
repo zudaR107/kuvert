@@ -339,19 +339,28 @@ function AccountForm({ formId, initial, isEditing, onSubmit }: {
   onSubmit: (values: AccountFormValues) => void
 }) {
   const [values, setValues] = useState(initial)
+  const [currencyError, setCurrencyError] = useState('')
 
   function set<K extends keyof AccountFormValues>(key: K, value: AccountFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }))
   }
 
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!/^[A-Z]{3}$/.test(values.currency)) {
+      setCurrencyError('Код валюты — 3 латинские буквы (например, RUB)')
+      return
+    }
+    setCurrencyError('')
+    onSubmit({ ...values, name: values.name.trim() || ACCOUNT_NAME_PLACEHOLDER })
+  }
+
   return (
     <form
       id={formId}
-      onSubmit={(e) => {
-        e.preventDefault()
-        onSubmit({ ...values, name: values.name.trim() || ACCOUNT_NAME_PLACEHOLDER })
-      }}
+      onSubmit={handleSubmit}
       onKeyDown={handleArrowFieldNavigation}
+      noValidate
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -380,9 +389,10 @@ function AccountForm({ formId, initial, isEditing, onSubmit }: {
             id="account-currency"
             label="Валюта"
             value={values.currency}
-            onChange={(e) => set('currency', e.target.value.toUpperCase())}
+            onChange={(e) => { set('currency', e.target.value.toUpperCase()); setCurrencyError('') }}
             maxLength={3}
             required
+            error={currencyError}
           />
         </div>
         {!isEditing && (

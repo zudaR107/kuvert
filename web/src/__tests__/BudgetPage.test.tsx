@@ -723,6 +723,24 @@ describe('BudgetPage allocation affordance', () => {
     expect(within(row).getByRole('textbox')).toHaveAttribute('tabindex', '-1')
   })
 
+  it('committing a negative allocation reverts to the previous value instead of sending a request', async () => {
+    const user = userEvent.setup()
+    const button = await getAllocatedButton()
+    const row = button.closest('tr') as HTMLElement
+
+    await user.click(button)
+    const input = within(row).getByRole('textbox')
+    await user.clear(input)
+    await user.type(input, '-50')
+    await user.keyboard('{Enter}')
+
+    expect(api.put).not.toHaveBeenCalled()
+    // Re-entering edit mode shows the original allocated amount, not the
+    // rejected negative value.
+    await user.click(within(row).getByRole('button'))
+    expect(within(row).getByRole('textbox')).toHaveValue(String(mockBudgetData.envelopes[0]!.allocated / 100))
+  })
+
   // Swapping the pill button for the (differently-sized) editing input
   // used to reflow the whole table - the browser's default "auto" table
   // layout recomputes column widths from whatever's currently rendered

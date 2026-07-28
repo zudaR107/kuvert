@@ -7,6 +7,7 @@ import {
 } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, toMinorUnits, today } from '../../lib/format'
+import { validateAmount, validateDate } from '../../lib/validation'
 import { useToast } from '../../hooks/useToast'
 
 const GOAL_FORM_ID = 'goal-form'
@@ -264,19 +265,29 @@ function GoalForm({ formId, onSubmit }: {
   onSubmit: (values: GoalFormValues) => void
 }) {
   const [values, setValues] = useState<GoalFormValues>(DEFAULT_GOAL_FORM)
+  const [targetAmountError, setTargetAmountError] = useState('')
 
   function set<K extends keyof GoalFormValues>(key: K, value: GoalFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }))
   }
 
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const amountError = validateAmount(values.targetAmount)
+    if (amountError) {
+      setTargetAmountError(amountError)
+      return
+    }
+    setTargetAmountError('')
+    onSubmit({ ...values, name: values.name.trim() || GOAL_NAME_PLACEHOLDER })
+  }
+
   return (
     <form
       id={formId}
-      onSubmit={(e) => {
-        e.preventDefault()
-        onSubmit({ ...values, name: values.name.trim() || GOAL_NAME_PLACEHOLDER })
-      }}
+      onSubmit={handleSubmit}
       onKeyDown={handleArrowFieldNavigation}
+      noValidate
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -291,8 +302,9 @@ function GoalForm({ formId, onSubmit }: {
         id="goal-target"
         label="Целевая сумма"
         value={values.targetAmount}
-        onChange={(v) => set('targetAmount', v)}
+        onChange={(v) => { set('targetAmount', v); setTargetAmountError('') }}
         required
+        error={targetAmountError}
       />
 
       <DateField
@@ -325,22 +337,49 @@ function GoalForm({ formId, onSubmit }: {
   )
 }
 
+interface ContributionFormErrors {
+  accountId?: string
+  amount?: string
+  date?: string
+}
+
 function ContributionForm({ formId, accounts, onSubmit }: {
   formId: string
   accounts: Account[]
   onSubmit: (values: ContributionFormValues) => void
 }) {
   const [values, setValues] = useState<ContributionFormValues>(() => defaultContributionForm(accounts))
+  const [errors, setErrors] = useState<ContributionFormErrors>({})
 
   function set<K extends keyof ContributionFormValues>(key: K, value: ContributionFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }))
+    setErrors((e) => ({ ...e, [key]: undefined }))
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+
+    const nextErrors: ContributionFormErrors = {}
+    if (!values.accountId) nextErrors.accountId = 'Выберите счёт'
+    const amountError = validateAmount(values.amount)
+    if (amountError) nextErrors.amount = amountError
+    const dateError = validateDate(values.date)
+    if (dateError) nextErrors.date = dateError
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors)
+      return
+    }
+    setErrors({})
+    onSubmit(values)
   }
 
   return (
     <form
       id={formId}
-      onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
+      onSubmit={handleSubmit}
       onKeyDown={handleArrowFieldNavigation}
+      noValidate
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -350,6 +389,7 @@ function ContributionForm({ formId, accounts, onSubmit }: {
         value={values.accountId}
         onChange={(e) => set('accountId', e.target.value)}
         required
+        error={errors.accountId}
       >
         {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
       </Field>
@@ -360,6 +400,7 @@ function ContributionForm({ formId, accounts, onSubmit }: {
         value={values.amount}
         onChange={(v) => set('amount', v)}
         required
+        error={errors.amount}
       />
 
       <DateField
@@ -368,6 +409,7 @@ function ContributionForm({ formId, accounts, onSubmit }: {
         value={values.date}
         onChange={(v) => set('date', v)}
         required
+        error={errors.date}
       />
 
       <Field

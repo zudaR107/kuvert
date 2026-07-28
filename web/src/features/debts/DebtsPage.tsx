@@ -7,6 +7,7 @@ import {
 } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits } from '../../lib/format'
+import { validateAmount } from '../../lib/validation'
 import { useToast } from '../../hooks/useToast'
 
 const DEBT_FORM_ID = 'debt-form'
@@ -265,25 +266,48 @@ function DebtRow({ debt, onEdit, onSettle, onDelete }: {
   )
 }
 
+interface DebtFormErrors {
+  amount?: string
+  currency?: string
+}
+
 function DebtForm({ formId, initial, onSubmit }: {
   formId: string
   initial: DebtFormValues
   onSubmit: (values: DebtFormValues) => void
 }) {
   const [values, setValues] = useState(initial)
+  const [errors, setErrors] = useState<DebtFormErrors>({})
 
   function set<K extends keyof DebtFormValues>(key: K, value: DebtFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }))
+    setErrors((e) => ({ ...e, [key]: undefined }))
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+
+    const nextErrors: DebtFormErrors = {}
+    const amountError = validateAmount(values.amount)
+    if (amountError) nextErrors.amount = amountError
+    if (!/^[A-Z]{3}$/.test(values.currency)) {
+      nextErrors.currency = 'Код валюты — 3 латинские буквы (например, RUB)'
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors)
+      return
+    }
+    setErrors({})
+    onSubmit({ ...values, counterparty: values.counterparty.trim() || DEBT_COUNTERPARTY_PLACEHOLDER })
   }
 
   return (
     <form
       id={formId}
-      onSubmit={(e) => {
-        e.preventDefault()
-        onSubmit({ ...values, counterparty: values.counterparty.trim() || DEBT_COUNTERPARTY_PLACEHOLDER })
-      }}
+      onSubmit={handleSubmit}
       onKeyDown={handleArrowFieldNavigation}
+      noValidate
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field
@@ -314,6 +338,7 @@ function DebtForm({ formId, initial, onSubmit }: {
             value={values.amount}
             onChange={(v) => set('amount', v)}
             required
+            error={errors.amount}
           />
         </div>
         <div style={{ flex: 1 }}>
@@ -324,6 +349,7 @@ function DebtForm({ formId, initial, onSubmit }: {
             onChange={(e) => set('currency', e.target.value.toUpperCase())}
             maxLength={3}
             required
+            error={errors.currency}
           />
         </div>
       </div>
