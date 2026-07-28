@@ -208,3 +208,11 @@ fit best; add a new section if none fits.
   stretching (flex's default `align-items: stretch`) to match the taller
   labeled "Период" date-range field beside them. Switched all three to
   the shared labeled `Field` select, matching height and style.
+- Fixed a broken production build after a Dependabot batch bumped
+  TypeScript to 7: `routeLoaders.test.tsx` used the Node-specific
+  `global.fetch`, which only ever typechecked because something in the
+  older dependency graph transitively pulled in `@types/node`'s ambient
+  `global` declaration - `web/tsconfig.app.json`'s own `types` array
+  deliberately excludes `node`. Switched to `globalThis.fetch`, the
+  standard cross-environment reference already used elsewhere, which
+  needs no ambient Node types at all.

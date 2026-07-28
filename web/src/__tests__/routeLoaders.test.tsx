@@ -55,7 +55,7 @@ const userProfileFixture = { id: 'user-1', email: 'test@example.com', name: 'Т�
 type FetchResult = { status?: number; ok?: boolean; body: unknown }
 
 function setFetchMock(handler: (url: string) => FetchResult | null) {
-  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input)
     const result = handler(url)
     if (!result) throw new Error(`Unexpected fetch: ${url}`)
@@ -71,7 +71,7 @@ function setFetchMock(handler: (url: string) => FetchResult | null) {
 }
 
 function setFetchRejects() {
-  global.fetch = vi.fn(async () => {
+  globalThis.fetch = vi.fn(async () => {
     throw new Error('network error')
   }) as unknown as typeof fetch
 }
@@ -153,7 +153,7 @@ describe('/budget route loader', () => {
 
     expect(queryClient.getQueryData(['periods'])).toEqual([])
     // Exactly one fetch call — periods only, no /budget follow-up.
-    expect(vi.mocked(global.fetch).mock.calls.length).toBe(1)
+    expect(vi.mocked(globalThis.fetch).mock.calls.length).toBe(1)
   })
 
   it('swallows a fetch failure instead of throwing/rejecting', async () => {
