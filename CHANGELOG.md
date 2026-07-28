@@ -134,6 +134,15 @@ fit best; add a new section if none fits.
 - Lazy, cron-free envelope rollover between budget periods.
 - Recurring goal regeneration once a goal's target is reached.
 - Universal CSV transaction import.
+- Security audit fixes: `POST`/`PUT /transactions`, `POST
+  /goals/:id/contribute`, and `POST`/`PUT /envelopes` only checked that a
+  referenced `accountId`/`envelopeId`/`toAccountId`/`categoryId` existed
+  (via the DB's foreign key), not that it actually belonged to the calling
+  user - now verified the same way `periods`' allocation route already
+  did. `GET /accounts/:id/balance` now also scopes its transaction sum by
+  `userId`, not just `accountId`, for defense in depth. Added a global
+  5MB request body size limit (`hono/body-limit`) - nothing previously
+  bounded the size of a pasted CSV import.
 
 ## Infrastructure
 - CI (tests + lint) on every push/PR.

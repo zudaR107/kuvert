@@ -123,7 +123,8 @@ router.get('/:id/balance', async (c) => {
     .where(and(eq(accounts.id, id), eq(accounts.userId, user.id))).get()
   if (!account) return c.json({ error: 'Not found' }, 404)
 
-  const txs = await db.select().from(transactions).where(eq(transactions.accountId, id))
+  const txs = await db.select().from(transactions)
+    .where(and(eq(transactions.accountId, id), eq(transactions.userId, user.id)))
   const txBalance = txs.reduce((sum, t) => {
     if (t.type === 'income') return sum + t.amount
     if (t.type === 'expense') return sum - t.amount

@@ -70,9 +70,24 @@ router.get('/', async (c) => {
   )
 })
 
+// A given categoryId only guarantees the row exists, not that it's this
+// user's own - same class of check as transactions/goals' account
+// references.
+async function checkCategoryOwnership(userId: string, categoryId: string | null | undefined): Promise<Response | null> {
+  if (!categoryId) return null
+  const category = await db.select().from(categories)
+    .where(and(eq(categories.id, categoryId), eq(categories.userId, userId))).get()
+  if (!category) return Response.json({ error: 'Category not found' }, { status: 404 })
+  return null
+}
+
 router.post('/', zValidator('json', envelopeSchema), async (c) => {
   const user = c.get('user')
   const data = c.req.valid('json')
+
+  const ownershipError = await checkCategoryOwnership(user.id, data.categoryId)
+  if (ownershipError) return ownershipError
+
   const envelope = { id: createId(), userId: user.id, ...data, archived: false, createdAt: new Date() }
   await db.insert(envelopes).values(envelope)
   return c.json(envelope, 201)
@@ -85,6 +100,10 @@ router.put('/:id', zValidator('json', envelopeSchema.partial()), async (c) => {
   const existing = await db.select().from(envelopes)
     .where(and(eq(envelopes.id, id), eq(envelopes.userId, user.id))).get()
   if (!existing) return c.json({ error: 'Not found' }, 404)
+
+  const ownershipError = await checkCategoryOwnership(user.id, data.categoryId)
+  if (ownershipError) return ownershipError
+
   await db.update(envelopes).set(data).where(eq(envelopes.id, id))
   return c.json({ ...existing, ...data })
 })
