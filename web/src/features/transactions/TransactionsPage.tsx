@@ -282,20 +282,26 @@ function TransactionFilters({ filters, accounts, envelopes, onChange }: {
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
-      <select className="input" style={{ width: 'auto' }} aria-label="Счёт" value={filters.accountId} onChange={(e) => set('accountId', e.target.value)}>
-        <option value="">Все счета</option>
-        {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-      </select>
-      <select className="input" style={{ width: 'auto' }} aria-label="Конверт" value={filters.envelopeId} onChange={(e) => set('envelopeId', e.target.value)}>
-        <option value="">Все конверты</option>
-        {envelopes.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-      </select>
-      <select className="input" style={{ width: 'auto' }} aria-label="Тип" value={filters.type} onChange={(e) => set('type', e.target.value)}>
-        <option value="">Все типы</option>
-        <option value="income">Доход</option>
-        <option value="expense">Расход</option>
-        <option value="transfer">Перевод</option>
-      </select>
+      <div style={{ width: 160 }}>
+        <Field as="select" id="tx-filter-account" label="Счёт" value={filters.accountId} onChange={(e) => set('accountId', e.target.value)}>
+          <option value="">Все счета</option>
+          {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </Field>
+      </div>
+      <div style={{ width: 160 }}>
+        <Field as="select" id="tx-filter-envelope" label="Конверт" value={filters.envelopeId} onChange={(e) => set('envelopeId', e.target.value)}>
+          <option value="">Все конверты</option>
+          {envelopes.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+        </Field>
+      </div>
+      <div style={{ width: 140 }}>
+        <Field as="select" id="tx-filter-type" label="Тип" value={filters.type} onChange={(e) => set('type', e.target.value)}>
+          <option value="">Все типы</option>
+          <option value="income">Доход</option>
+          <option value="expense">Расход</option>
+          <option value="transfer">Перевод</option>
+        </Field>
+      </div>
       <div style={{ width: 220 }}>
         <DateRangeField
           id="tx-filter-range"

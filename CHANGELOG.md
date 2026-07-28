@@ -166,3 +166,8 @@ fit best; add a new section if none fits.
 - License/CI badges, a link to the Hof meta-repo, fixed gateway repo URL
   casing after its rename to lowercase.
 - Wrote the gateway's project name lowercase ("tor") everywhere in prose.
+- Fixed the Transactions page's account/envelope/type filter selects
+  rendering visually tall - they were plain unlabeled `<select>`s
+  stretching (flex's default `align-items: stretch`) to match the taller
+  labeled "Период" date-range field beside them. Switched all three to
+  the shared labeled `Field` select, matching height and style.
