@@ -124,6 +124,11 @@ fit best; add a new section if none fits.
   Existing tests kept passing completely unchanged; new tests for
   `useToast` and the first page's toast wiring were written by an
   independent subagent from a behavioral spec.
+- Bumped `schloss-ui` for `StatTile`'s row-misalignment fix (a long
+  wrapped label no longer pushes its tile's value down relative to its
+  row's other tiles) and `Badge`'s baseline-mismatch fix against plain
+  text - both used here (Transactions' summary tiles and type badges,
+  Debts/Goals/Envelopes' status badges).
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
