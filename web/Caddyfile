@@ -16,7 +16,15 @@
 	}
 
 	handle /auth/* {
-		reverse_proxy schlussel:4000
+		# X-Schlussel-Frontend marks a request as genuinely same-origin to
+		# schlussel's own hosted frontend (see the isTrustedOrigin gate in
+		# schlussel's src/routes/auth.ts) - without stripping it here, a
+		# client could set it directly on a request through this proxy and
+		# have it forwarded unchanged, since reverse_proxy otherwise passes
+		# through whatever headers the client sent.
+		reverse_proxy schlussel:4000 {
+			header_up -X-Schlussel-Frontend
+		}
 	}
 
 	handle {
