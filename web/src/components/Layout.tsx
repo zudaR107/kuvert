@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   LayoutDashboard, Mail, Receipt, Target, CreditCard, Wallet, Settings,
-  LogOut, X
+  LogOut, X, FileCode2
 } from 'lucide-react'
 import { Toast, ThemeToggle } from '@zudar107/schloss-ui'
 import { useAuth } from '../hooks/useAuth'
@@ -38,6 +38,10 @@ const NAV_ITEMS = [
   { to: '/settings',     icon: <Settings size={18} />,        label: 'Настройки' },
 ]
 
+// Admin-only, appended rather than baked into NAV_ITEMS - /docs 403s the
+// API request for anyone else, so hiding the link avoids a dead-end click.
+const DOCS_NAV_ITEM = { to: '/docs', icon: <FileCode2 size={18} />, label: 'Документация API' }
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth()
   const toast = useToast()
@@ -57,6 +61,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const suppressNextClickRef = useRef(false)
 
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_WIDTH : expandedWidth
+  const navItems = user?.role === 'admin' ? [...NAV_ITEMS, DOCS_NAV_ITEM] : NAV_ITEMS
 
   const handlePointerMove = useCallback((e: MouseEvent) => {
     const start = dragStartRef.current
@@ -195,7 +200,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             sidebar past the viewport instead once there are enough
             nav items). */}
         <nav style={{ flex: 1, minHeight: 0, padding: '0.75rem 0.5rem', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
-          {NAV_ITEMS.map(({ to, icon, label }) => {
+          {navItems.map(({ to, icon, label }) => {
             const active = pathname.startsWith(to)
             return (
               <Link
@@ -331,7 +336,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
         <nav style={{ flex: 1, padding: '0.75rem 0.5rem', display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {NAV_ITEMS.map(({ to, icon, label }) => {
+          {navItems.map(({ to, icon, label }) => {
             const active = pathname.startsWith(to)
             return (
               <Link
