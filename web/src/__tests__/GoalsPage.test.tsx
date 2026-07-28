@@ -315,6 +315,23 @@ describe('GoalsPage create-goal modal', () => {
     expect(b.recurringDay).toBeNull()
   })
 
+  it('rejects an empty target amount without ever posting', async () => {
+    mockApiForGoals([activeGoal])
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-goal' })
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+    await user.click(screen.getByRole('button', { name: 'Новая цель' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'Название' }), 'Машина')
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(await within(dialog).findByText('Введите сумму')).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
   it('checking the recurring checkbox and submitting posts recurring: true with a non-null integer recurringDay', async () => {
     mockApiForGoals([activeGoal])
     vi.mocked(api.post).mockResolvedValue({ id: 'new-goal' })
@@ -457,6 +474,23 @@ describe('GoalsPage contribute flow', () => {
     expect(Number.isInteger(b.amount)).toBe(true)
     expect(b.accountId).toBe('acc-2')
     expect(b.date).toBeTruthy()
+  })
+
+  it('rejects an empty contribution amount without ever posting', async () => {
+    mockApiForGoals([activeGoal])
+    vi.mocked(api.post).mockResolvedValue({})
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Отпуск')
+    await user.click(screen.getByRole('button', { name: 'Пополнить' }))
+    const dialog = await screen.findByRole('dialog', { name: /Отпуск/ })
+
+    await pickToday(user, within(dialog).getByLabelText('Дата'))
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить|Пополнить/ })
+    await user.click(submitButton)
+
+    expect(await within(dialog).findByText('Введите сумму')).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
   })
 
   it('closes the contribution modal on a successful POST', async () => {

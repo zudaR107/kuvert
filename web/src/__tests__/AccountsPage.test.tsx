@@ -440,6 +440,25 @@ describe('AccountsPage create flow', () => {
     expect(within(dialog).getByDisplayValue('RUB')).toBeInTheDocument()
   })
 
+  it('rejects a currency code shorter than 3 letters without ever posting', async () => {
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-acc' })
+    const user = userEvent.setup()
+    render(<AccountsPage />, { wrapper: createWrapper() })
+    await user.click(await screen.findByRole('button', { name: 'Новый счёт' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый счёт' })
+
+    const currencyField = within(dialog).getByLabelText('Валюта')
+    await user.clear(currencyField)
+    await user.type(currencyField, 'RU')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(await within(dialog).findByText('Код валюты — 3 латинские буквы (например, RUB)')).toBeInTheDocument()
+    expect(currencyField).toHaveAttribute('aria-invalid', 'true')
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
   it('submitting with only the name filled posts initialBalance: 0 (integer)', async () => {
     vi.mocked(api.post).mockResolvedValue({ id: 'new-acc' })
     const user = userEvent.setup()

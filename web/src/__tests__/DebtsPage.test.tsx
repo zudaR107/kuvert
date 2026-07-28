@@ -432,6 +432,41 @@ describe('DebtsPage create flow', () => {
     expect(Number.isInteger(b.amount)).toBe(true)
   })
 
+  it('rejects an empty amount without ever posting', async () => {
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-debt' })
+    const user = userEvent.setup()
+    render(<DebtsPage />, { wrapper: createWrapper() })
+    await user.click(await screen.findByRole('button', { name: 'Новый долг' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый долг' })
+
+    await user.type(findCounterpartyInput(dialog), 'Иван Петров')
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(await within(dialog).findByText('Введите сумму')).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('rejects a currency code shorter than 3 letters without ever posting', async () => {
+    vi.mocked(api.post).mockResolvedValue({ id: 'new-debt' })
+    const user = userEvent.setup()
+    render(<DebtsPage />, { wrapper: createWrapper() })
+    await user.click(await screen.findByRole('button', { name: 'Новый долг' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый долг' })
+
+    await user.type(findCounterpartyInput(dialog), 'Иван Петров')
+    await user.type(findAmountInput(dialog), '100')
+    const currencyField = within(dialog).getByLabelText('Валюта')
+    await user.clear(currencyField)
+    await user.type(currencyField, 'RU')
+
+    const submitButton = within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+    await user.click(submitButton)
+
+    expect(await within(dialog).findByText('Код валюты — 3 латинские буквы (например, RUB)')).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
   it('closes the modal on a successful POST', async () => {
     vi.mocked(api.post).mockResolvedValue({ id: 'new-debt' })
     const user = userEvent.setup()

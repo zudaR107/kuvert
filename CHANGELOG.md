@@ -129,6 +129,20 @@ fit best; add a new section if none fits.
   row's other tiles) and `Badge`'s baseline-mismatch fix against plain
   text - both used here (Transactions' summary tiles and type badges,
   Debts/Goals/Envelopes' status badges).
+- Every form (Transactions, Accounts, Goals, Debts, the budget period/
+  allocation editor) now validates its own inputs client-side and
+  highlights the specific invalid field in red, instead of silently
+  defaulting invalid input or relying on a generic error toast. Closes
+  several previously-silent gaps: transaction/goal/debt amounts used
+  `parseFloat(...) || 0`, so an empty or garbled amount silently became a
+  0-amount submission; a transfer's destination account could be left
+  unselected; currency codes weren't format-checked; a negative budget
+  allocation could be typed and sent to a server route that only rejects
+  it after the fact. New `lib/validation.ts` centralizes the rules
+  (required text, amount > 0, valid date). Bumped `schloss-ui` again for
+  `Field`'s new `error`-driven red border and `invalid` prop, both needed
+  here (`AmountField`/`DateField`/`NumberField` already forwarded them
+  transparently, needing no changes of their own).
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.

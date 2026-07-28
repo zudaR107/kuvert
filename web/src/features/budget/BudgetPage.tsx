@@ -307,7 +307,12 @@ function EnvelopeRow({ row, onAllocate }: { row: BudgetRow; onAllocate: (amount:
   function commitAllocation() {
     setEditing(false)
     const n = parseFloat(value)
-    if (!isNaN(n)) onAllocate(toMinorUnits(n))
+    // A negative allocation isn't meaningful (the server itself rejects
+    // it - allocationSchema requires >= 0) and NaN means the field was
+    // left blank/garbled - both silently revert to the previous value,
+    // same as cancelling, rather than sending a request bound to fail.
+    if (!isNaN(n) && n >= 0) onAllocate(toMinorUnits(n))
+    else setValue(String(fromMinorUnits(row.allocated)))
   }
 
   function cancelEditing() {

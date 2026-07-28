@@ -7,6 +7,7 @@ import {
 } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits, today } from '../../lib/format'
+import { validateAmount, validateDate } from '../../lib/validation'
 import { useToast } from '../../hooks/useToast'
 
 const TX_FORM_ID = 'transaction-form'
@@ -356,6 +357,13 @@ function TransactionRow({ tx, account, envelope, onEdit, onDelete }: {
   )
 }
 
+interface TxFormErrors {
+  accountId?: string
+  toAccountId?: string
+  amount?: string
+  date?: string
+}
+
 function TransactionForm({ formId, accounts, envelopes, initial, onSubmit }: {
   formId: string
   accounts: Account[]
@@ -364,16 +372,38 @@ function TransactionForm({ formId, accounts, envelopes, initial, onSubmit }: {
   onSubmit: (values: TxFormValues) => void
 }) {
   const [values, setValues] = useState(initial)
+  const [errors, setErrors] = useState<TxFormErrors>({})
 
   function set<K extends keyof TxFormValues>(key: K, value: TxFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }))
+    setErrors((e) => ({ ...e, [key]: undefined }))
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+
+    const nextErrors: TxFormErrors = {}
+    if (!values.accountId) nextErrors.accountId = 'Выберите счёт'
+    if (values.type === 'transfer' && !values.toAccountId) nextErrors.toAccountId = 'Выберите счёт назначения'
+    const amountError = validateAmount(values.amount)
+    if (amountError) nextErrors.amount = amountError
+    const dateError = validateDate(values.date)
+    if (dateError) nextErrors.date = dateError
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors)
+      return
+    }
+    setErrors({})
+    onSubmit(values)
   }
 
   return (
     <form
       id={formId}
-      onSubmit={(e) => { e.preventDefault(); onSubmit(values) }}
+      onSubmit={handleSubmit}
       onKeyDown={handleArrowFieldNavigation}
+      noValidate
       style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
     >
       <Field as="select" id="tx-type" label="Тип" value={values.type} onChange={(e) => set('type', e.target.value as TxType)}>
@@ -389,6 +419,7 @@ function TransactionForm({ formId, accounts, envelopes, initial, onSubmit }: {
         value={values.accountId}
         onChange={(e) => set('accountId', e.target.value)}
         required
+        error={errors.accountId}
       >
         {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
       </Field>
@@ -401,6 +432,7 @@ function TransactionForm({ formId, accounts, envelopes, initial, onSubmit }: {
           value={values.toAccountId}
           onChange={(e) => set('toAccountId', e.target.value)}
           required
+          error={errors.toAccountId}
         >
           <option value="">Выберите счёт</option>
           {accounts.filter((a) => a.id !== values.accountId).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -426,6 +458,7 @@ function TransactionForm({ formId, accounts, envelopes, initial, onSubmit }: {
             value={values.amount}
             onChange={(v) => set('amount', v)}
             required
+            error={errors.amount}
           />
         </div>
         <div style={{ flex: 1 }}>
@@ -435,6 +468,7 @@ function TransactionForm({ formId, accounts, envelopes, initial, onSubmit }: {
             value={values.date}
             onChange={(v) => set('date', v)}
             required
+            error={errors.date}
           />
         </div>
       </div>
