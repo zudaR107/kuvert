@@ -159,6 +159,9 @@ fit best; add a new section if none fits.
   app, fed by the same schema-derived document.
 - Added the OpenAPI docs viewer to the README's feature list, and an
   "Updated docs" line to the PR checklist template.
+- The `/docs` Swagger viewer wasn't linked from the sidebar - the only way
+  to reach it was typing the URL directly. Added a nav item, shown only
+  for admins (it 403s the spec request for anyone else).
 
 ## Polish
 - Distinct favicon and a fixed browser tab title (was still the literal
