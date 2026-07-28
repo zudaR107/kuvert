@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { cors } from 'hono/cors'
+import { bodyLimit } from 'hono/body-limit'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
@@ -29,6 +30,14 @@ const ALLOWED_ORIGINS = (process.env['ALLOWED_ORIGINS'] ?? 'http://localhost:517
 
 const app = new Hono()
 
+// Generous enough for any real CSV export (even several thousand rows is
+// well under a megabyte) while still bounding memory use against an
+// arbitrarily large pasted/uploaded body - CSV import is the only route
+// that takes anything larger than a small JSON object.
+app.use('*', bodyLimit({
+  maxSize: 5 * 1024 * 1024,
+  onError: (c) => c.json({ error: 'Request body too large' }, 413),
+}))
 app.use('*', logger())
 app.use('*', cors({
   origin: (origin) => (ALLOWED_ORIGINS.includes(origin) ? origin : null),

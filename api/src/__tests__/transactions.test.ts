@@ -195,6 +195,13 @@ describe('POST /transactions/import', () => {
     expect(res.status).toBe(404)
   })
 
+  it('returns 413 for a request body over the global size limit', async () => {
+    const acct = await mkAccount()
+    const hugeCsv = 'date,amount,type\n' + '2026-07-01,100.00,income\n'.repeat(300_000) // ~7.5MB
+    const res = await importTx({ accountId: acct.id, csv: hugeCsv })
+    expect(res.status).toBe(413)
+  })
+
   it('returns 400 and imports nothing when the "type" column is missing', async () => {
     const acct = await mkAccount()
     const res = await importTx({ accountId: acct.id, csv: 'date,amount\n2026-07-01,100.00\n' })

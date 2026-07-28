@@ -51,9 +51,40 @@ router.get('/', zValidator('query', listQuerySchema), async (c) => {
   return c.json(rows)
 })
 
+// Verifies every referenced id (account, envelope, transfer destination
+// account) actually belongs to the calling user, not just that it exists -
+// a foreign key alone only guarantees the row is real, not that it's
+// theirs. Returns the matching error response to short-circuit with, or
+// null if every reference given checks out.
+async function checkReferencedOwnership(
+  userId: string,
+  data: { accountId?: string; envelopeId?: string | null; toAccountId?: string | null },
+): Promise<Response | null> {
+  if (data.accountId) {
+    const account = await db.select().from(accounts)
+      .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, userId))).get()
+    if (!account) return Response.json({ error: 'Account not found' }, { status: 404 })
+  }
+  if (data.envelopeId) {
+    const envelope = await db.select().from(envelopes)
+      .where(and(eq(envelopes.id, data.envelopeId), eq(envelopes.userId, userId))).get()
+    if (!envelope) return Response.json({ error: 'Envelope not found' }, { status: 404 })
+  }
+  if (data.toAccountId) {
+    const toAccount = await db.select().from(accounts)
+      .where(and(eq(accounts.id, data.toAccountId), eq(accounts.userId, userId))).get()
+    if (!toAccount) return Response.json({ error: 'Destination account not found' }, { status: 404 })
+  }
+  return null
+}
+
 router.post('/', zValidator('json', txSchema), async (c) => {
   const user = c.get('user')
   const data = c.req.valid('json')
+
+  const ownershipError = await checkReferencedOwnership(user.id, data)
+  if (ownershipError) return ownershipError
+
   const tx = { id: createId(), userId: user.id, ...data, importId: null, createdAt: new Date() }
   await db.insert(transactions).values(tx)
   return c.json(tx, 201)
@@ -161,6 +192,10 @@ router.put('/:id', zValidator('json', txSchema.partial()), async (c) => {
   const existing = await db.select().from(transactions)
     .where(and(eq(transactions.id, id), eq(transactions.userId, user.id))).get()
   if (!existing) return c.json({ error: 'Not found' }, 404)
+
+  const ownershipError = await checkReferencedOwnership(user.id, data)
+  if (ownershipError) return ownershipError
+
   await db.update(transactions).set(data).where(eq(transactions.id, id))
   return c.json({ ...existing, ...data })
 })

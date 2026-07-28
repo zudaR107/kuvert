@@ -130,6 +130,19 @@ describe('Envelope isolation', () => {
     const list = await (await asUser2.get('/envelopes?archived=true')).json() as any[]
     expect(list).toHaveLength(0)
   })
+
+  it("user-2 cannot create an envelope under user-1's category", async () => {
+    const cat1 = await (await asUser1.post('/envelopes/categories', { name: 'Bills' })).json() as any
+    const res = await asUser2.post('/envelopes', { name: 'Food', categoryId: cat1.id })
+    expect(res.status).toBe(404)
+  })
+
+  it("user-2 cannot repoint their own envelope's categoryId to user-1's category", async () => {
+    const cat1 = await (await asUser1.post('/envelopes/categories', { name: 'Bills' })).json() as any
+    const env2 = await (await asUser2.post('/envelopes', { name: 'Food' })).json() as any
+    const res = await asUser2.put(`/envelopes/${env2.id}`, { categoryId: cat1.id })
+    expect(res.status).toBe(404)
+  })
 })
 
 // ── Goals ──────────────────────────────────────────────────────────
@@ -160,6 +173,13 @@ describe('Goal isolation', () => {
   it('user-2 cannot list contributions for user-1 goal', async () => {
     const g = await (await asUser1.post('/goals', { name: 'Car', targetAmount: 100000 })).json() as any
     expect((await asUser2.get(`/goals/${g.id}/contributions`)).status).toBe(404)
+  })
+
+  it("user-1 cannot contribute to their own goal using user-2's account", async () => {
+    const g = await (await asUser1.post('/goals', { name: 'Car', targetAmount: 100000 })).json() as any
+    const acct2 = await (await asUser2.post('/accounts', { name: 'Acct2' })).json() as any
+    const res = await asUser1.post(`/goals/${g.id}/contribute`, { accountId: acct2.id, amount: 100, date: '2026-07-01' })
+    expect(res.status).toBe(404)
   })
 })
 
@@ -201,5 +221,37 @@ describe('Transaction isolation', () => {
     const acct = await (await asUser1.post('/accounts', { name: 'A' })).json() as any
     const tx = await (await asUser1.post('/transactions', { accountId: acct.id, type: 'income', amount: 100, date: '2026-07-01' })).json() as any
     expect((await asUser2.del(`/transactions/${tx.id}`)).status).toBe(404)
+  })
+
+  it("user-2 cannot create a transaction against user-1's account", async () => {
+    const acct1 = await (await asUser1.post('/accounts', { name: 'A' })).json() as any
+    const res = await asUser2.post('/transactions', { accountId: acct1.id, type: 'income', amount: 100, date: '2026-07-01' })
+    expect(res.status).toBe(404)
+  })
+
+  it("user-2 cannot repoint their own transaction's accountId to user-1's account", async () => {
+    const acct1 = await (await asUser1.post('/accounts', { name: 'A1' })).json() as any
+    const acct2 = await (await asUser2.post('/accounts', { name: 'A2' })).json() as any
+    const tx = await (await asUser2.post('/transactions', { accountId: acct2.id, type: 'income', amount: 100, date: '2026-07-01' })).json() as any
+    const res = await asUser2.put(`/transactions/${tx.id}`, { accountId: acct1.id })
+    expect(res.status).toBe(404)
+  })
+
+  it("user-2 cannot create a transaction against user-1's envelope", async () => {
+    const acct2 = await (await asUser2.post('/accounts', { name: 'A2' })).json() as any
+    const env1 = await (await asUser1.post('/envelopes', { name: 'Food' })).json() as any
+    const res = await asUser2.post('/transactions', {
+      accountId: acct2.id, envelopeId: env1.id, type: 'expense', amount: 100, date: '2026-07-01',
+    })
+    expect(res.status).toBe(404)
+  })
+
+  it("user-2 cannot transfer into user-1's account", async () => {
+    const acct2 = await (await asUser2.post('/accounts', { name: 'A2' })).json() as any
+    const acct1 = await (await asUser1.post('/accounts', { name: 'A1' })).json() as any
+    const res = await asUser2.post('/transactions', {
+      accountId: acct2.id, toAccountId: acct1.id, type: 'transfer', amount: 100, date: '2026-07-01',
+    })
+    expect(res.status).toBe(404)
   })
 })

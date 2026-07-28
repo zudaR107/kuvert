@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { eq, and } from 'drizzle-orm'
 import { createId } from '@paralleldrive/cuid2'
 import { db } from '../../db/index.js'
-import { goals, goalContributions } from '../../db/schema.js'
+import { goals, goalContributions, accounts } from '../../db/schema.js'
 import { requireAuth } from '../../middleware/auth.js'
 
 const router = new Hono()
@@ -141,6 +141,10 @@ router.post('/:id/contribute', zValidator('json', contributionSchema), async (c)
   const goal = await db.select().from(goals)
     .where(and(eq(goals.id, goalId), eq(goals.userId, user.id))).get()
   if (!goal) return c.json({ error: 'Not found' }, 404)
+
+  const account = await db.select().from(accounts)
+    .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id))).get()
+  if (!account) return c.json({ error: 'Account not found' }, 404)
 
   const contribution = {
     id: createId(),
