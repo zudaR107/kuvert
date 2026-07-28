@@ -196,6 +196,13 @@ fit best; add a new section if none fits.
 - The `/docs` Swagger viewer wasn't linked from the sidebar - the only way
   to reach it was typing the URL directly. Added a nav item, shown only
   for admins (it 403s the spec request for anyone else).
+- Added a `/help` page: a plain-language usage guide for regular end
+  users, covering the envelope-budgeting model and one section per main
+  tab (Счета, Бюджет, Транзакции, Цели, Долги, Настройки). Reachable via
+  a new always-visible "Справка" sidebar entry (unlike the admin-only
+  "Документация API" link) and the shared Footer's help link. Text
+  skeleton only for now, with screenshot slots at
+  `web/public/guide/kuvert-*.png` for the user to fill in later.
 
 ## Polish
 - Distinct favicon and a fixed browser tab title (was still the literal
