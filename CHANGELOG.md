@@ -163,6 +163,12 @@ fit best; add a new section if none fits.
   self-update to the latest 11.x broke every workflow run once pnpm
   11.12.0 shipped with a bug in its own self-installer, unrelated to
   any change in this repo.
+- Security audit finding: the `/auth/*` proxy to schlussel forwarded a
+  client-supplied `X-Schlussel-Frontend` header unchanged - that header
+  is schlussel's own signal for "this request is genuinely same-origin to
+  my own hosted frontend," and only schlussel-web's own Caddyfile is
+  supposed to ever set it. Now stripped (`header_up -X-Schlussel-Frontend`)
+  before proxying, so it can only ever be absent through this path.
 
 ## Docs
 - README, AGPL-3.0 LICENSE, CONTRIBUTING.md.
