@@ -164,6 +164,12 @@ fit best; add a new section if none fits.
 - Migrated from nginx to Caddy in the web image.
 - Docker images published to GHCR on merge to `main`.
 - Dependabot for both npm and GitHub Actions dependencies.
+- Added a Dependabot `ignore` rule for `better-sqlite3` major-version
+  bumps in `/api` - v13 dropped prebuilt binaries entirely (always
+  compiles from source via `node-gyp` now, on every platform), which
+  broke schlussel's Docker build after the same routine bump there.
+  kuvert-api is still on `^12.11.1` and was never actually affected;
+  this is purely preventive.
 - Dropped published host port - reached only through the tor gateway now.
 - Fixed docker-compose.yml's default `ALLOWED_ORIGINS`/`VITE_SCHLUSSEL_URL`
   to `https://` - tor's gateway auto-upgrades everything to HTTPS, so the
