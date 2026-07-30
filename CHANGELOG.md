@@ -155,6 +155,12 @@ fit best; add a new section if none fits.
   new `ThemeSync` component (schloss-ui#61) pointed at schlussel's
   `/theme-sync.html` hub, unconditionally and before the auth-loading
   check (theme sync has nothing to do with being signed in).
+- The theme dropdown could cover its own trigger in the sidebar (the
+  off-screen correction pinned it to the viewport bottom regardless of
+  where the trigger was), and the sync above didn't actually work (a
+  freshly-visited origin's own default-theme timestamp could outrank a
+  real pick made moments earlier on another origin). Bumped `schloss-ui`
+  again for both fixes (schloss-ui#63/#64).
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
