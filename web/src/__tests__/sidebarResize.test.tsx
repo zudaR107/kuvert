@@ -219,14 +219,16 @@ describe('sidebar click-to-toggle', () => {
 
     // The shared ThemeToggle dropdown replaced the old cycle-on-click
     // button - clicking it now opens a menu of all 4 themes instead of
-    // silently jumping to the next one.
+    // silently jumping to the next one. The menu itself is portaled to
+    // document.body (so it can't be clipped by the sidebar's own
+    // overflow), so it's queried there rather than scoped to `sidebar`.
     expect(within(sidebar).queryByText('Тёмная')).not.toBeInTheDocument()
     fireEvent.click(themeBtn)
 
     expect(widthPx(sidebar)).toBe(initialWidth)
-    expect(within(sidebar).getByText('Тёмная')).toBeInTheDocument()
-    expect(within(sidebar).getByText('OLED')).toBeInTheDocument()
-    expect(within(sidebar).getByText('Сепия')).toBeInTheDocument()
+    expect(within(document.body).getByText('Тёмная')).toBeInTheDocument()
+    expect(within(document.body).getByText('OLED')).toBeInTheDocument()
+    expect(within(document.body).getByText('Сепия')).toBeInTheDocument()
   })
 
   it('clicking the logout button does not toggle the sidebar', () => {
