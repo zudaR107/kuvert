@@ -150,6 +150,11 @@ fit best; add a new section if none fits.
   dropdown-positioning fix (schloss-ui#59/#60) - the sidebar's own theme
   switcher is exactly the case that bug affected (dropdown running off
   the bottom of a short viewport).
+- The selected theme didn't carry over to/from schloss and schlussel -
+  each is a separate origin, so `localStorage` isn't shared. Mounted the
+  new `ThemeSync` component (schloss-ui#61) pointed at schlussel's
+  `/theme-sync.html` hub, unconditionally and before the auth-loading
+  check (theme sync has nothing to do with being signed in).
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
