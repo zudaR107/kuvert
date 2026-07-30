@@ -143,6 +143,13 @@ fit best; add a new section if none fits.
   `Field`'s new `error`-driven red border and `invalid` prop, both needed
   here (`AmountField`/`DateField`/`NumberField` already forwarded them
   transparently, needing no changes of their own).
+- Header was missing a theme toggle - it only existed in the sidebar,
+  unlike schloss's and schlussel's headers, which both show one. Added
+  `rightSlot={<ThemeToggle />}` to match. Also bumped the vendored
+  `schloss-ui` submodule pointer to pick up `ThemeToggle`'s
+  dropdown-positioning fix (schloss-ui#59/#60) - the sidebar's own theme
+  switcher is exactly the case that bug affected (dropdown running off
+  the bottom of a short viewport).
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.

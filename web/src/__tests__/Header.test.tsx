@@ -156,6 +156,16 @@ describe('Header user area when a user is present', () => {
   })
 })
 
+describe('Header theme toggle', () => {
+  it('renders the shared ThemeToggle trigger button', async () => {
+    // The header previously had no theme control of its own (only the
+    // sidebar did) - it now also renders the shared `ThemeToggle` from
+    // @zudar107/schloss-ui, matching schloss's and schlussel's headers.
+    const { header } = await renderLayout(mockUser)
+    expect(within(header).getByRole('button', { name: 'Сменить тему' })).toBeInTheDocument()
+  })
+})
+
 describe('Header user area when there is no user', () => {
   it('does not render the settings button, the logout button, the avatar, or any name text', async () => {
     const { header } = await renderLayout(null)
