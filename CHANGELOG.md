@@ -161,6 +161,13 @@ fit best; add a new section if none fits.
   freshly-visited origin's own default-theme timestamp could outrank a
   real pick made moments earlier on another origin). Bumped `schloss-ui`
   again for both fixes (schloss-ui#63/#64).
+- The sync still didn't actually work even after that, for a bigger
+  reason: the hidden-iframe design's own storage was partitioned by
+  Firefox/Safari per embedding site, so it could never sync anything
+  regardless of application logic. Replaced with `ThemeSync` talking
+  directly to a real API (`GET`/`PUT` schlussel's `/theme`) via plain
+  `fetch` - `hubOrigin` prop renamed `apiOrigin`, no more hidden iframe.
+  Bumped `schloss-ui` again.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
