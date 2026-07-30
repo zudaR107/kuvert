@@ -9,9 +9,9 @@ import { applyTheme, getStoredTheme, ThemeSync } from '@zudar107/schloss-ui'
 import './index.css'
 
 // Same origin schlussel's own login/account links already point at (see
-// lib/authRedirect.ts) - it doubles as the theme-sync hub since kuvert's
-// own localStorage can't be read from schloss's or schlussel's origin
-// directly.
+// lib/authRedirect.ts) - it doubles as the theme-sync API's origin since
+// kuvert's own localStorage can't be read from schloss's or schlussel's
+// origin directly.
 const SCHLUSSEL_URL: string = (import.meta.env.VITE_SCHLUSSEL_URL as string | undefined) ?? 'http://localhost:4001'
 
 applyTheme(getStoredTheme())
@@ -21,7 +21,7 @@ function Root() {
 
   // Mounted unconditionally, before the auth-loading check below - theme
   // sync has nothing to do with being signed in, and shouldn't wait on it.
-  const themeSync = <ThemeSync hubOrigin={SCHLUSSEL_URL} />
+  const themeSync = <ThemeSync apiOrigin={SCHLUSSEL_URL} />
 
   if (auth.loading) {
     return (
