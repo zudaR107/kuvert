@@ -209,6 +209,11 @@ fit best; add a new section if none fits.
   "Документация API" link) and the shared Footer's help link. Text
   skeleton only for now, with screenshot slots at
   `web/public/guide/kuvert-*.png` for the user to fill in later.
+- Fixed the `/help` page's "Первые шаги" numbered list rendering with no
+  visible `1./2./3.` markers - just unexplained indentation. Tailwind's
+  preflight base styles reset `ol`/`ul` to `list-style: none`; the page's
+  own inline style set the indent (`paddingLeft`) but never restored a
+  `list-style-type`. Added `listStyleType: 'decimal'` explicitly.
 
 ## Polish
 - Distinct favicon and a fixed browser tab title (was still the literal
