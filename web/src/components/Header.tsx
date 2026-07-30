@@ -1,5 +1,5 @@
 import { Menu } from 'lucide-react'
-import { Header as SharedHeader } from '@zudar107/schloss-ui'
+import { Header as SharedHeader, ThemeToggle } from '@zudar107/schloss-ui'
 import { buildSchluesselAccountUrl } from '../lib/authRedirect'
 import type { AuthUser } from '../hooks/useAuth'
 
@@ -40,6 +40,7 @@ export function Header({ user, onLogout, onOpenMobileMenu }: HeaderProps) {
       // preferences (currency) and stays reachable from the sidebar.
       onSettings={() => { window.location.href = buildSchluesselAccountUrl(window.location.pathname) }}
       onLogout={onLogout}
+      rightSlot={<ThemeToggle />}
       leftSlot={
         <button
           onClick={onOpenMobileMenu}
