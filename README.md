@@ -3,20 +3,22 @@
 [![Test](https://github.com/zudaR107/kuvert/actions/workflows/test.yml/badge.svg)](https://github.com/zudaR107/kuvert/actions/workflows/test.yml)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
-Part of the [Schloss platform](https://github.com/zudaR107/Hof).
+Part of the [Hof platform](https://github.com/zudaR107/Hof) — a suite of
+self-hosted personal services:
 
-Kuvert ("envelope" in German) is an envelope-budgeting service — the first real service
-built on top of the Schloss platform. Money gets allocated into named envelopes for each
-budget period; spending against an envelope is tracked from your transactions, and
-unused money can roll over into the next period.
-
-## How it fits into the platform
-
-Each service is its own repo, named after a German word related to what it does:
-
-- [`schloss`](https://github.com/zudaR107/schloss) — the home page / launcher
+- [`schloss`](https://github.com/zudaR107/schloss) — home page / launcher
 - [`schlussel`](https://github.com/zudaR107/schlussel) — auth: accounts, login, tokens
 - **`kuvert`** (this repo) — envelope budgeting
+- [`tafel`](https://github.com/zudaR107/tafel) — task/project tracking
+- [`tor`](https://github.com/zudaR107/tor) — reverse-proxy gateway
+- [`schloss-ui`](https://github.com/zudaR107/schloss-ui) — shared frontend components
+- [`schloss-server-kit`](https://github.com/zudaR107/schloss-server-kit) — shared backend auth/CORS kit
+
+Kuvert ("envelope" in German) is an envelope-budgeting service. Money gets allocated
+into named envelopes for each budget period; spending against an envelope is tracked
+from your transactions, and unused money can roll over into the next period.
+
+## How it fits into the platform
 
 Kuvert has no login form of its own. An unauthenticated visitor is redirected to
 Schlüssel's hosted login page and back; the API verifies the resulting token itself
