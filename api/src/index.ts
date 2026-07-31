@@ -1,7 +1,7 @@
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
-import { cors } from 'hono/cors'
+import { createCorsMiddleware } from '@zudar107/schloss-server-kit'
 import { bodyLimit } from 'hono/body-limit'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -39,13 +39,7 @@ app.use('*', bodyLimit({
   onError: (c) => c.json({ error: 'Request body too large' }, 413),
 }))
 app.use('*', logger())
-app.use('*', cors({
-  origin: (origin) => (ALLOWED_ORIGINS.includes(origin) ? origin : null),
-  allowHeaders: ['Content-Type', 'Authorization'],
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  credentials: true,
-  maxAge: 86400,
-}))
+app.use('*', createCorsMiddleware({ allowedOrigins: ALLOWED_ORIGINS }))
 
 app.get('/health', (c) => c.json({ status: 'ok', service: 'Kuvert' }))
 

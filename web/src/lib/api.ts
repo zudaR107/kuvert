@@ -1,67 +1,23 @@
-const BASE = '/api'
+// Thin wrapper around @zudar107/schloss-ui's config-driven API client -
+// preserves kuvert's own module shape (setAccessToken/getAccessToken/api/
+// ApiError) so nothing else in the app needs to change. `apiClient` (the
+// raw instance) is also exported so hooks/useAuth.ts can share the exact
+// same token state via useAuthProvider's `apiClient` config.
+import { createApiClient, ApiError } from '@zudar107/schloss-ui'
 
-let accessToken: string | null = null
+export { ApiError }
 
-export function setAccessToken(token: string | null) {
-  accessToken = token
-}
+export const apiClient = createApiClient({
+  base: '/api',
+  onUnauthorized: () => { window.location.href = '/login' },
+})
 
-export function getAccessToken() {
-  return accessToken
-}
-
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(init.headers as Record<string, string>),
-  }
-  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
-
-  const res = await fetch(`${BASE}${path}`, { ...init, headers, credentials: 'include' })
-
-  if (res.status === 401) {
-    // Try refresh
-    const refreshed = await tryRefresh()
-    if (refreshed) {
-      headers['Authorization'] = `Bearer ${accessToken}`
-      const retry = await fetch(`${BASE}${path}`, { ...init, headers, credentials: 'include' })
-      if (!retry.ok) throw new ApiError(retry.status, await retry.text())
-      return retry.json() as Promise<T>
-    }
-    setAccessToken(null)
-    window.location.href = '/login'
-    throw new ApiError(401, 'Unauthorized')
-  }
-
-  if (!res.ok) throw new ApiError(res.status, await res.text())
-  if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
-}
-
-async function tryRefresh(): Promise<boolean> {
-  try {
-    const res = await fetch('/auth/refresh', { method: 'POST', credentials: 'include' })
-    if (!res.ok) return false
-    const data = await res.json() as { accessToken: string }
-    setAccessToken(data.accessToken)
-    return true
-  } catch {
-    return false
-  }
-}
-
-export class ApiError extends Error {
-  status: number
-
-  constructor(status: number, message: string) {
-    super(message)
-    this.status = status
-  }
-}
+export const setAccessToken = apiClient.setAccessToken
+export const getAccessToken = apiClient.getAccessToken
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
-  put: <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  get: apiClient.get,
+  post: apiClient.post,
+  put: apiClient.put,
+  delete: apiClient.delete,
 }

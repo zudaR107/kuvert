@@ -1,32 +1,17 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   LayoutDashboard, Mail, Receipt, Target, CreditCard, Wallet, Settings,
   LogOut, X, FileCode2, HelpCircle
 } from 'lucide-react'
-import { Toast, ThemeToggle } from '@zudar107/schloss-ui'
+import { Toast, ThemeToggle, useSidebarWidth } from '@zudar107/schloss-ui'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { buildSchluesselLogoutUrl, buildSchluesselAccountUrl } from '../lib/authRedirect'
 import { Footer } from './Footer'
 import { Header } from './Header'
 
-const SIDEBAR_COLLAPSED_WIDTH = 64
-const SIDEBAR_DEFAULT_WIDTH = 220
-const SIDEBAR_MIN_WIDTH = 180
-const SIDEBAR_MAX_WIDTH = 360
-// Dragging narrower than this snaps shut to the icon-only rail instead of
-// leaving an awkward in-between width.
-const SIDEBAR_COLLAPSE_THRESHOLD = 140
 const SIDEBAR_WIDTH_STORAGE_KEY = 'kuvert-sidebar-width'
-
-function getStoredSidebarWidth(): number {
-  const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY))
-  if (Number.isFinite(stored) && stored >= SIDEBAR_MIN_WIDTH && stored <= SIDEBAR_MAX_WIDTH) {
-    return stored
-  }
-  return SIDEBAR_DEFAULT_WIDTH
-}
 
 const NAV_ITEMS = [
   { to: '/budget',       icon: <LayoutDashboard size={18} />, label: 'Бюджет' },
@@ -48,72 +33,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const toast = useToast()
   const { pathname } = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
-  const [expandedWidth, setExpandedWidth] = useState(getStoredSidebarWidth)
-  const [dragging, setDragging] = useState(false)
-  const dragStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
-  // Browsers fire a synthetic "click" on mouseup right after a drag if the
-  // pointer ends up back over an element inside the sidebar (which it
-  // often does for a small drag) - without this, that phantom click
-  // bubbles to the sidebar's own click-to-toggle handler below and
-  // immediately collapses whatever width was just dragged to. Set to
-  // true for the rest of this tick whenever a real drag happened; the
-  // click-to-toggle handler checks and ignores it.
-  const suppressNextClickRef = useRef(false)
+  const { width: sidebarWidth, collapsed, dragging, toggleCollapsed, startDrag } = useSidebarWidth({
+    storageKey: SIDEBAR_WIDTH_STORAGE_KEY,
+  })
 
-  const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_WIDTH : expandedWidth
   const navItems = user?.role === 'admin' ? [...NAV_ITEMS, DOCS_NAV_ITEM] : NAV_ITEMS
-
-  const handlePointerMove = useCallback((e: MouseEvent) => {
-    const start = dragStartRef.current
-    if (!start) return
-    const next = start.startWidth + (e.clientX - start.startX)
-    suppressNextClickRef.current = true
-    if (next < SIDEBAR_COLLAPSE_THRESHOLD) {
-      setCollapsed(true)
-    } else {
-      setCollapsed(false)
-      setExpandedWidth(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, next)))
-    }
-  }, [])
-
-  const handlePointerUp = useCallback(() => {
-    dragStartRef.current = null
-    setDragging(false)
-    if (suppressNextClickRef.current) {
-      // Only suppress the synthetic click browsers fire immediately after
-      // this mouseup (same tick) - not some unrelated future click, in
-      // case the drag ended with the pointer outside the sidebar and no
-      // phantom click ever arrives to consume this flag itself.
-      setTimeout(() => { suppressNextClickRef.current = false }, 0)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!dragging) return
-    window.addEventListener('mousemove', handlePointerMove)
-    window.addEventListener('mouseup', handlePointerUp)
-    const previousCursor = document.body.style.cursor
-    const previousUserSelect = document.body.style.userSelect
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-    return () => {
-      window.removeEventListener('mousemove', handlePointerMove)
-      window.removeEventListener('mouseup', handlePointerUp)
-      document.body.style.cursor = previousCursor
-      document.body.style.userSelect = previousUserSelect
-    }
-  }, [dragging, handlePointerMove, handlePointerUp])
-
-  useEffect(() => {
-    if (!collapsed) localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(expandedWidth))
-  }, [collapsed, expandedWidth])
-
-  function startDrag(e: React.MouseEvent) {
-    e.preventDefault()
-    dragStartRef.current = { startX: e.clientX, startWidth: sidebarWidth }
-    setDragging(true)
-  }
 
   async function handleLogout() {
     try {
@@ -143,10 +67,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           Each interactive child below stops the click from bubbling here,
           so clicking an actual control never also toggles the sidebar. */}
       <aside
-        onClick={() => {
-          if (suppressNextClickRef.current) return
-          setCollapsed((c) => !c)
-        }}
+        onClick={toggleCollapsed}
         style={{
           width: sidebarWidth,
           background: 'var(--sidebar-bg)',

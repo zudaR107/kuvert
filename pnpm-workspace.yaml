@@ -2,6 +2,7 @@ packages:
   - "api"
   - "web"
   - "schloss-ui"
+  - "schloss-server-kit"
 
 allowBuilds:
   '@scarf/scarf': false
