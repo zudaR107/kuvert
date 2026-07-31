@@ -42,7 +42,13 @@ function loggedInMountMocks() {
 }
 
 beforeEach(() => {
-  vi.spyOn(api, 'setAccessToken')
+  // useAuthProvider now delegates to @zudar107/schloss-ui's shared hook,
+  // which calls `config.apiClient.setAccessToken(...)` (a method on the
+  // shared client instance) rather than this module's own re-exported
+  // `setAccessToken` binding - spying on the module export wouldn't
+  // observe that call, since it's a separate reference to the same
+  // underlying function. Spy on the instance method itself instead.
+  vi.spyOn(api.apiClient, 'setAccessToken')
 })
 
 afterEach(() => {
@@ -85,7 +91,7 @@ describe('useAuthProvider — logout', () => {
     })
 
     expect(result.current.user).toBeNull()
-    expect(api.setAccessToken).toHaveBeenCalledWith(null)
+    expect(api.apiClient.setAccessToken).toHaveBeenCalledWith(null)
   })
 
   it('still resolves and clears state when the /auth/logout fetch rejects with a network error', async () => {
@@ -109,7 +115,7 @@ describe('useAuthProvider — logout', () => {
     })
 
     expect(result.current.user).toBeNull()
-    expect(api.setAccessToken).toHaveBeenCalledWith(null)
+    expect(api.apiClient.setAccessToken).toHaveBeenCalledWith(null)
   })
 
   it('still resolves and clears state when the /auth/logout fetch resolves with a non-ok response', async () => {
@@ -127,6 +133,6 @@ describe('useAuthProvider — logout', () => {
     })
 
     expect(result.current.user).toBeNull()
-    expect(api.setAccessToken).toHaveBeenCalledWith(null)
+    expect(api.apiClient.setAccessToken).toHaveBeenCalledWith(null)
   })
 })

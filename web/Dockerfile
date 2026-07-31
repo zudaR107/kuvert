@@ -17,6 +17,7 @@ COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
 COPY web/package.json ./web/
 COPY api/package.json ./api/
 COPY schloss-ui/package.json ./schloss-ui/
+COPY schloss-server-kit/package.json ./schloss-server-kit/
 
 # --filter web doesn't spare this image from better-sqlite3 (the API
 # workspace's native dependency) - pnpm's frozen-lockfile install still

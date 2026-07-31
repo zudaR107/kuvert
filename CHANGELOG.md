@@ -214,6 +214,24 @@ fit best; add a new section if none fits.
   my own hosted frontend," and only schlussel-web's own Caddyfile is
   supposed to ever set it. Now stripped (`header_up -X-Schlussel-Frontend`)
   before proxying, so it can only ever be absent through this path.
+- Retrofitted onto two new shared platform packages instead of kuvert's
+  own duplicated copies: `api/src/middleware/auth.ts`'s JWKS verification
+  and `index.ts`'s CORS setup now delegate to a new
+  `@zudar107/schloss-server-kit` submodule (`createAuthMiddleware`/
+  `createCorsMiddleware`); `web/src/lib/{pkce,authRedirect,api}.ts` and
+  `hooks/useAuth.ts` are now thin wrappers around `@zudar107/schloss-ui`'s
+  new config-driven auth exports; `Layout.tsx`'s hand-rolled sidebar
+  resize/collapse state machine is now `schloss-ui`'s `useSidebarWidth`
+  hook. Pure refactor - kuvert's own existing test suite is the
+  regression check (one test file's `setAccessToken` spy target moved
+  from the module export to the shared client instance it now actually
+  gets called on, no behavior change). Both Dockerfiles updated to build
+  `schloss-server-kit` from source alongside the existing `schloss-ui`
+  step; a `--prod` install strips devDependencies workspace-wide, which
+  broke `hono` (only a peerDependency of the kit) resolving at runtime in
+  the api image until its `node_modules` was also copied from the
+  non-prod builder stage - caught by an actual container boot+`/health`+
+  `/accounts` 401 smoke test, not just a build-succeeds check.
 
 ## Docs
 - README, AGPL-3.0 LICENSE, CONTRIBUTING.md.

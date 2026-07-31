@@ -1,67 +1,30 @@
-import { createMiddleware } from 'hono/factory'
-import { jwtVerify, createRemoteJWKSet } from 'jose'
+import { createAuthMiddleware } from '@zudar107/schloss-server-kit'
+import type { AuthUser } from '@zudar107/schloss-server-kit'
 import { eq } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { users } from '../db/schema.js'
 
+export type { AuthUser }
+
 const JWKS_URL = process.env['SCHLUSSEL_JWKS_URL'] ?? 'http://localhost:4000/.well-known/jwks.json'
 const ISSUER = process.env['JWT_ISSUER'] ?? 'schlussel'
 
-const jwks = createRemoteJWKSet(new URL(JWKS_URL))
-
-export interface AuthUser {
-  id: string
-  email: string
-  name: string
-  role: 'admin' | 'user'
-}
-
-declare module 'hono' {
-  interface ContextVariableMap {
-    user: AuthUser
-  }
-}
-
-// Composed after requireAuth (which already verified the JWT and set
-// `c.get('user')`) - just reads the role that's already there, since
-// schlussel embeds it directly in the token claim.
-export const requireAdmin = createMiddleware(async (c, next) => {
-  const user = c.get('user')
-  if (user.role !== 'admin') {
-    return c.json({ error: 'Forbidden' }, 403)
-  }
-  await next()
-})
-
-export const requireAuth = createMiddleware(async (c, next) => {
-  const authHeader = c.req.header('Authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    return c.json({ error: 'Unauthorized' }, 401)
-  }
-
-  try {
-    const { payload } = await jwtVerify(authHeader.slice(7), jwks, { issuer: ISSUER })
-
-    const userId = payload.sub as string
-    const email = payload['email'] as string
-    const name = payload['name'] as string
-    const role = payload['role'] as 'admin' | 'user'
-
-    // Auto-provision user on first access
-    const existing = await db.select().from(users).where(eq(users.id, userId)).get()
+export const { requireAuth, requireAdmin } = createAuthMiddleware({
+  jwksUrl: JWKS_URL,
+  issuer: ISSUER,
+  // Auto-provision a local user row on first sight - kuvert stores only
+  // the user id from the JWT plus its own currency preference, no
+  // passwords here.
+  onUserSeen: async (user) => {
+    const existing = await db.select().from(users).where(eq(users.id, user.id)).get()
     if (!existing) {
       await db.insert(users).values({
-        id: userId,
-        email,
-        name,
+        id: user.id,
+        email: user.email,
+        name: user.name,
         currency: 'RUB',
         createdAt: new Date(),
       })
     }
-
-    c.set('user', { id: userId, email, name, role })
-    await next()
-  } catch {
-    return c.json({ error: 'Invalid or expired token' }, 401)
-  }
+  },
 })
