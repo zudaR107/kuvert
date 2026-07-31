@@ -105,9 +105,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             borderRadius: 8, flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <rect x="2" y="5" width="20" height="15" rx="2" />
-              <path d="M2 10h20" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <rect x="2" y="5" width="20" height="14" rx="2" fill="white" />
+              <path d="M2 6 L22 6 L12 15 Z" fill="white" fillOpacity="0.55" />
             </svg>
           </div>
           {!collapsed && (

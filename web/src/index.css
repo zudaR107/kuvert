@@ -43,6 +43,20 @@
   }
 }
 
+/* HeroIllustration's flap plays a brief "opening" flourish on mount -
+ * hinges around the top edge of the envelope, in SVG viewBox units. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes envelope-flap-open {
+    0%   { transform: rotate(0deg); }
+    40%  { transform: rotate(-18deg); }
+    100% { transform: rotate(0deg); }
+  }
+  .envelope-flap {
+    transform-origin: 70px 20px;
+    animation: envelope-flap-open 500ms ease;
+  }
+}
+
 @layer components {
   .card {
     background: var(--bg-surface);
