@@ -8,6 +8,7 @@ import {
 import { api } from '../../lib/api'
 import { formatAmount, formatMonthYear, fromMinorUnits, toMinorUnits, today } from '../../lib/format'
 import { useToast } from '../../hooks/useToast'
+import { HeroIllustration } from '../../components/HeroIllustration'
 
 const PERIOD_FORM_ID = 'period-form'
 
@@ -117,7 +118,7 @@ export function BudgetPage() {
     return (
       <>
         <EmptyState
-          icon={<ClipboardList size={ICON_SIZE.illustrative} strokeWidth={2} />}
+          icon={<HeroIllustration size={ICON_SIZE.illustrative} />}
           title="Бюджет не создан"
           description="Раздели доходы по конвертам — счета настраиваются отдельно, на странице «Счета»."
           actionLabel="Создать бюджет"
