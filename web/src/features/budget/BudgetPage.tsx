@@ -118,7 +118,7 @@ export function BudgetPage() {
     return (
       <>
         <EmptyState
-          icon={<HeroIllustration size={ICON_SIZE.illustrative} />}
+          illustration={<HeroIllustration size={100} />}
           title="Бюджет не создан"
           description="Раздели доходы по конвертам — счета настраиваются отдельно, на странице «Счета»."
           actionLabel="Создать бюджет"
