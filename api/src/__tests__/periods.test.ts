@@ -186,8 +186,14 @@ describe('GET /periods/:id/budget', () => {
 
   it("includes an account's opening-balance transaction in toBeBudgeted for the period covering today", async () => {
     // Period range deliberately spans "today" (system date), since account
-    // creation now stamps its opening transaction with today's date.
-    const period = await (await post('/periods', { name: 'Current', startDate: '2026-07-01', endDate: '2026-07-31' })).json() as any
+    // creation now stamps its opening transaction with today's date - computed
+    // from the current month rather than hardcoded, so this doesn't rot into
+    // a time-bomb once "today" moves past a fixed date range.
+    const now = new Date()
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    const monthEndStr = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, '0')}-${String(monthEnd.getDate()).padStart(2, '0')}`
+    const period = await (await post('/periods', { name: 'Current', startDate: monthStart, endDate: monthEndStr })).json() as any
 
     // Positive initialBalance -> an income transaction dated today, which
     // should now flow into toBeBudgeted just like any other income tx.
