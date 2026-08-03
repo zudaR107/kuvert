@@ -107,7 +107,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <rect x="2" y="5" width="20" height="14" rx="2" fill="white" />
-              <path d="M2 6 L22 6 L12 15 Z" fill="white" fillOpacity="0.55" />
+              <path d="M2 6 L22 6 L12 15 Z" fill="#0b7d73" />
             </svg>
           </div>
           {!collapsed && (
