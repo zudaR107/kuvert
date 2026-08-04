@@ -43,9 +43,9 @@ app.use('*', createCorsMiddleware({ allowedOrigins: ALLOWED_ORIGINS }))
 
 app.get('/health', (c) => c.json({ status: 'ok', service: 'Kuvert' }))
 
-// Reached from kuvert/web's own /docs page as /api/openapi.json (the web
-// container's Caddyfile already proxies /api/* here with the prefix
-// stripped) - no new reverse-proxy rule needed.
+// Reached from kuvert/frontend's own /docs page as /backend/openapi.json
+// (the frontend container's Caddyfile already proxies /backend/* here
+// with the prefix stripped) - no new reverse-proxy rule needed.
 app.get('/openapi.json', requireAuth, requireAdmin, (c) => c.json(openApiDocument))
 
 app.route('/accounts', accountsRouter)

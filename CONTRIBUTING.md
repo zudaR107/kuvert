@@ -1,15 +1,15 @@
 # Contributing to Kuvert
 
 Thanks for considering a contribution. Kuvert is an envelope-budgeting service and a
-pnpm workspace with two packages, `api/` and `web/` — please keep changes focused.
+pnpm workspace with two packages, `backend/` and `frontend/` — please keep changes focused.
 
 ## Getting set up
 
 ```sh
 pnpm install
 cp .env.example .env
-pnpm dev:api   # API on http://localhost:3001
-pnpm dev:web   # web on http://localhost:5174
+pnpm dev:backend    # API on http://localhost:3001
+pnpm dev:frontend   # frontend on http://localhost:5174
 ```
 
 See the [README](README.md) for environment variables and running the full stack with
@@ -17,8 +17,8 @@ Docker alongside `schlussel` and `schloss`.
 
 ## Before opening a PR
 
-- Run `pnpm --filter api test`, `pnpm --filter api lint`, `pnpm --filter web test`, and
-  `pnpm --filter web lint` — CI runs all four and will block merges that don't pass.
+- Run `pnpm --filter backend test`, `pnpm --filter backend lint`, `pnpm --filter frontend test`, and
+  `pnpm --filter frontend lint` — CI runs all four and will block merges that don't pass.
 - Add or update tests for any behavior change.
 - Keep commits focused; one logical change per PR is easier to review than several
   bundled together.

@@ -6,7 +6,7 @@ import { queryClient } from '../lib/queryClient'
 // These tests deliberately do NOT read src/router/index.tsx or
 // src/lib/queryClient.ts — they exercise the loaders purely through the
 // public `router` object and assert on the QueryClient cache, exactly as a
-// consumer of the contract would. `fetch` is mocked at the `/api/...` URL
+// consumer of the contract would. `fetch` is mocked at the `/backend/...` URL
 // level (the same boundary `src/lib/api.ts`'s `request()` calls through).
 // ---------------------------------------------------------------------------
 
@@ -50,7 +50,7 @@ const userProfileFixture = { id: 'user-1', email: 'test@example.com', name: 'Т�
 
 // ---------------------------------------------------------------------------
 // fetch mock helper — routes by exact URL string, mirrors how `src/lib/api.ts`
-// calls `fetch(`/api${path}`)`.
+// calls `fetch(`/backend${path}`)`.
 // ---------------------------------------------------------------------------
 type FetchResult = { status?: number; ok?: boolean; body: unknown }
 
@@ -130,8 +130,8 @@ describe('shared QueryClient instance', () => {
 describe('/budget route loader', () => {
   it('prefetches periods and, since periods is non-empty, the budget for the first period', async () => {
     setFetchMock((url) => {
-      if (url === '/api/periods') return { body: [periodFixture] }
-      if (url === `/api/periods/${periodFixture.id}/budget`) return { body: budgetFixture }
+      if (url === '/backend/periods') return { body: [periodFixture] }
+      if (url === `/backend/periods/${periodFixture.id}/budget`) return { body: budgetFixture }
       return null
     })
 
@@ -144,7 +144,7 @@ describe('/budget route loader', () => {
 
   it('does not fetch budget (and does not throw) when periods is empty', async () => {
     setFetchMock((url) => {
-      if (url === '/api/periods') return { body: [] }
+      if (url === '/backend/periods') return { body: [] }
       return null // any other fetch is "unexpected" and would throw
     })
 
@@ -176,7 +176,7 @@ describe('/budget route loader', () => {
 describe('/accounts route loader', () => {
   it('prefetches accounts under queryKey ["accounts"]', async () => {
     setFetchMock((url) => {
-      if (url === '/api/accounts') return { body: accountsFixture }
+      if (url === '/backend/accounts') return { body: accountsFixture }
       return null
     })
 
@@ -202,7 +202,7 @@ describe('/accounts route loader', () => {
 
   it('swallows a non-2xx response instead of throwing/rejecting', async () => {
     setFetchMock((url) => {
-      if (url === '/api/accounts') return { body: { error: 'boom' }, status: 500, ok: false }
+      if (url === '/backend/accounts') return { body: { error: 'boom' }, status: 500, ok: false }
       return null
     })
 
@@ -223,8 +223,8 @@ describe('/accounts route loader', () => {
 describe('/goals route loader', () => {
   it('prefetches both goals and accounts in parallel', async () => {
     setFetchMock((url) => {
-      if (url === '/api/goals') return { body: goalsFixture }
-      if (url === '/api/accounts') return { body: accountsFixture }
+      if (url === '/backend/goals') return { body: goalsFixture }
+      if (url === '/backend/accounts') return { body: accountsFixture }
       return null
     })
 
@@ -242,7 +242,7 @@ describe('/goals route loader', () => {
 describe('/debts route loader', () => {
   it('prefetches debts under queryKey ["debts", false] with a boolean, not a string', async () => {
     setFetchMock((url) => {
-      if (url === '/api/debts?settled=false') return { body: debtsFixture }
+      if (url === '/backend/debts?settled=false') return { body: debtsFixture }
       return null
     })
 
@@ -261,9 +261,9 @@ describe('/debts route loader', () => {
 describe('/transactions route loader', () => {
   it('prefetches accounts, envelopes, and transactions (with empty-string search key) in parallel', async () => {
     setFetchMock((url) => {
-      if (url === '/api/accounts') return { body: accountsFixture }
-      if (url === '/api/envelopes') return { body: envelopesFixture }
-      if (url === '/api/transactions') return { body: transactionsFixture }
+      if (url === '/backend/accounts') return { body: accountsFixture }
+      if (url === '/backend/envelopes') return { body: envelopesFixture }
+      if (url === '/backend/transactions') return { body: transactionsFixture }
       return null
     })
 
@@ -282,7 +282,7 @@ describe('/transactions route loader', () => {
 describe('/settings route loader', () => {
   it('prefetches the user profile under queryKey ["userProfile"]', async () => {
     setFetchMock((url) => {
-      if (url === '/api/users/me') return { body: userProfileFixture }
+      if (url === '/backend/users/me') return { body: userProfileFixture }
       return null
     })
 

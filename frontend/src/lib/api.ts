@@ -8,7 +8,7 @@ import { createApiClient, ApiError } from '@zudar107/schloss-ui'
 export { ApiError }
 
 export const apiClient = createApiClient({
-  base: '/api',
+  base: '/backend',
   onUnauthorized: () => { window.location.href = '/login' },
 })
 
