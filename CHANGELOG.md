@@ -232,6 +232,10 @@ fit best; add a new section if none fits.
   the api image until its `node_modules` was also copied from the
   non-prod builder stage - caught by an actual container boot+`/health`+
   `/accounts` 401 smoke test, not just a build-succeeds check.
+- Renamed the workspace packages `api`/`web` to `backend`/`frontend`
+  (directories, Docker service names, the `/api` reverse-proxy path and
+  the frontend HTTP client's base URL, CI job/image names) for platform-
+  wide naming consistency.
 
 ## Docs
 - README, AGPL-3.0 LICENSE, CONTRIBUTING.md.

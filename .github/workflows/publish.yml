@@ -13,10 +13,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - image: kuvert-api
-            dockerfile: api/Dockerfile
-          - image: kuvert-web
-            dockerfile: web/Dockerfile
+          - image: kuvert-backend
+            dockerfile: backend/Dockerfile
+          - image: kuvert-frontend
+            dockerfile: frontend/Dockerfile
     steps:
       # schloss-ui is a git submodule - needs to be checked out so it's
       # present in the build context these Dockerfiles COPY from.

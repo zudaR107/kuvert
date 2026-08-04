@@ -8,11 +8,12 @@
 		file_server
 	}
 
-	# handle_path strips the matched /api prefix before proxying, same as
-	# nginx's proxy_pass http://kuvert-api:3001/ (trailing slash rewrite) -
-	# kuvert-api's own routes are mounted at root, not under /api.
-	handle_path /api/* {
-		reverse_proxy kuvert-api:3001
+	# handle_path strips the matched /backend prefix before proxying, same
+	# as nginx's proxy_pass http://kuvert-backend:3001/ (trailing slash
+	# rewrite) - kuvert-backend's own routes are mounted at root, not
+	# under /backend.
+	handle_path /backend/* {
+		reverse_proxy kuvert-backend:3001
 	}
 
 	handle /auth/* {
