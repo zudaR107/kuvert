@@ -43,13 +43,21 @@
   }
 }
 
-/* HeroIllustration's flap plays a brief "opening" flourish on mount -
- * hinges around the top edge of the envelope, in SVG viewBox units. */
+/* HeroIllustration's flap plays a brief "opening" flourish on mount - the
+ * flap path is one rigid triangle spanning the full width of the
+ * envelope, so a rotate() around any single point (even one on the top
+ * edge) swings the whole shape sideways as a rigid body instead of
+ * "opening" it - the tip visibly slides left/right and the two top
+ * corners see-saw in opposite directions. scaleY anchored at the top
+ * edge instead keeps that edge (the flap's real hinge) fixed and only
+ * shortens/lengthens the vertical drop to the tip, so the flap lifts
+ * straight up toward the hinge and settles back down with no sideways
+ * skew at any point in the animation. */
 @media (prefers-reduced-motion: no-preference) {
   @keyframes envelope-flap-open {
-    0%   { transform: rotate(0deg); }
-    40%  { transform: rotate(-18deg); }
-    100% { transform: rotate(0deg); }
+    0%   { transform: scaleY(1); }
+    40%  { transform: scaleY(0.55); }
+    100% { transform: scaleY(1); }
   }
   .envelope-flap {
     transform-origin: 70px 20px;
