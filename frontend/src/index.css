@@ -43,25 +43,28 @@
   }
 }
 
-/* HeroIllustration's flap plays a brief "opening" flourish on mount - the
+/* HeroIllustration's flap plays a brief "closing" flourish on mount - the
  * flap path is one rigid triangle spanning the full width of the
  * envelope, so a rotate() around any single point (even one on the top
  * edge) swings the whole shape sideways as a rigid body instead of
- * "opening" it - the tip visibly slides left/right and the two top
+ * opening/closing it - the tip visibly slides left/right and the two top
  * corners see-saw in opposite directions. scaleY anchored at the top
  * edge instead keeps that edge (the flap's real hinge) fixed and only
- * shortens/lengthens the vertical drop to the tip, so the flap lifts
- * straight up toward the hinge and settles back down with no sideways
- * skew at any point in the animation. */
+ * shortens/lengthens the vertical drop to the tip, so the flap folds
+ * down with no sideways skew at any point in the animation. Starts fully
+ * open (scaleY(0) - the flap collapsed flat against its own hinge, so it
+ * reads as not there yet) and closes down into its resting shape, with a
+ * small overshoot past full size before settling, like a real flap
+ * dropping into place. */
 @media (prefers-reduced-motion: no-preference) {
   @keyframes envelope-flap-open {
-    0%   { transform: scaleY(1); }
-    40%  { transform: scaleY(0.55); }
+    0%   { transform: scaleY(0); }
+    70%  { transform: scaleY(1.08); }
     100% { transform: scaleY(1); }
   }
   .envelope-flap {
     transform-origin: 70px 20px;
-    animation: envelope-flap-open 500ms ease;
+    animation: envelope-flap-open 600ms ease-out;
   }
 }
 
