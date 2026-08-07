@@ -12,7 +12,7 @@ import { DocsPage } from '../features/docs/DocsPage'
 import { HelpPage } from '../features/help/HelpPage'
 import { AuthCallbackPage } from '../features/auth/AuthCallbackPage'
 import { getAccessToken, api } from '../lib/api'
-import { buildSchluesselLoginUrl } from '../lib/authRedirect'
+import { redirectToLogin } from '../lib/loginRedirect'
 import { queryClient } from '../lib/queryClient'
 
 interface RouterContext {
@@ -52,7 +52,7 @@ const protectedLayout = createRoute({
   id: 'protected',
   beforeLoad: async () => {
     if (!getAccessToken()) {
-      window.location.href = await buildSchluesselLoginUrl(window.location.pathname + window.location.search)
+      await redirectToLogin()
     }
   },
   component: () => <Layout><Outlet /></Layout>,

@@ -14,6 +14,7 @@ import { transactionsRouter } from './features/transactions/router.js'
 import { goalsRouter } from './features/goals/router.js'
 import { debtsRouter } from './features/debts/router.js'
 import { usersRouter } from './features/users/router.js'
+import { exportRouter } from './features/export/router.js'
 import { requireAuth, requireAdmin } from './middleware/auth.js'
 import { openApiDocument } from './openapi.js'
 
@@ -55,6 +56,7 @@ app.route('/transactions', transactionsRouter)
 app.route('/goals', goalsRouter)
 app.route('/debts', debtsRouter)
 app.route('/users', usersRouter)
+app.route('/export', exportRouter)
 
 const PORT = Number(process.env['PORT'] ?? 3001)
 serve({ fetch: app.fetch, port: PORT }, () => {

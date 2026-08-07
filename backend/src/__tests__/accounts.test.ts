@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 vi.mock('../db/index.js', async () => await import('./helpers/db.js'))
 vi.mock('../middleware/auth.js', async () => await import('./helpers/auth-mock.js'))
 
-import { cleanDb } from './helpers/db.js'
+import { cleanDb, sqlite } from './helpers/db.js'
 import { createTestApp } from './helpers/setup.js'
 
 const app = createTestApp()
@@ -160,6 +160,100 @@ describe('PUT /accounts/:id', () => {
     const res = await put('/accounts/nonexistent', { name: 'X' })
     expect(res.status).toBe(404)
   })
+
+  it('does not reset omitted defaulted fields during a partial update', async () => {
+    const created = await (await post('/accounts', {
+      name: 'Custom',
+      type: 'savings',
+      currency: 'USD',
+      initialBalance: 4200,
+      color: '#abcdef',
+    })).json() as any
+
+    const res = await put(`/accounts/${created.id}`, { name: 'Renamed' })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({
+      name: 'Renamed',
+      type: 'savings',
+      currency: 'USD',
+      initialBalance: 4200,
+      color: '#abcdef',
+    })
+
+    expect(await (await get(`/accounts/${created.id}`)).json()).toMatchObject({
+      type: 'savings',
+      currency: 'USD',
+      initialBalance: 4200,
+      color: '#abcdef',
+    })
+  })
+
+  it('does not allow initialBalance to be changed after account creation', async () => {
+    const created = await (await post('/accounts', {
+      name: 'Opening balance',
+      initialBalance: 4200,
+    })).json() as any
+
+    await put(`/accounts/${created.id}`, { initialBalance: 9900 })
+
+    expect(await (await get(`/accounts/${created.id}`)).json()).toMatchObject({
+      initialBalance: 4200,
+    })
+    const transactions = await (await get(`/transactions?accountId=${created.id}`)).json() as any[]
+    expect(transactions).toHaveLength(1)
+    expect(transactions[0]!.amount).toBe(4200)
+  })
+
+  it.each([
+    ['source', true],
+    ['destination', false],
+  ] as const)('rejects changing the currency of a transfer %s account', async (_side, updateSource) => {
+    const source = await (await post('/accounts', { name: 'Source', currency: 'RUB' })).json() as any
+    const destination = await (await post('/accounts', { name: 'Destination', currency: 'RUB' })).json() as any
+    const transfer = await post('/transactions', {
+      accountId: source.id,
+      toAccountId: destination.id,
+      type: 'transfer',
+      amount: 2500,
+      date: '2026-07-01',
+    })
+    expect(transfer.status).toBe(201)
+
+    const account = updateSource ? source : destination
+    const res = await put(`/accounts/${account.id}`, { currency: 'USD' })
+
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({
+      error: 'Account currency cannot be changed while linked to a transfer',
+    })
+    expect(await (await get(`/accounts/${account.id}`)).json()).toMatchObject({ currency: 'RUB' })
+    expect(await (await get('/transactions')).json()).toEqual([
+      expect.objectContaining({ accountId: source.id, toAccountId: destination.id, type: 'transfer' }),
+    ])
+  })
+})
+
+describe('account opening transaction atomicity', () => {
+  it('rolls back the account when its opening transaction cannot be inserted', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    sqlite.exec(`
+      CREATE TRIGGER fail_opening_transaction
+      BEFORE INSERT ON transactions
+      BEGIN
+        SELECT RAISE(ABORT, 'forced opening transaction failure');
+      END
+    `)
+
+    try {
+      await Promise.resolve(post('/accounts', { name: 'Must roll back', initialBalance: 4200 })).catch(() => undefined)
+    } finally {
+      sqlite.exec('DROP TRIGGER fail_opening_transaction')
+      consoleError.mockRestore()
+    }
+
+    expect(await (await get('/accounts')).json()).toEqual([])
+    expect(await (await get('/transactions')).json()).toEqual([])
+  })
 })
 
 describe('DELETE /accounts/:id', () => {
@@ -311,5 +405,21 @@ describe('GET /accounts/:id/balance', () => {
     const acct = await (await post('/accounts', { name: 'NoDoubleCount', initialBalance: 12345 })).json() as any
     const res = await get(`/accounts/${acct.id}/balance`)
     expect((await res.json() as any).balance).toBe(12345)
+  })
+
+  it('subtracts a transfer from its source and adds it to its destination', async () => {
+    const source = await (await post('/accounts', { name: 'Source', initialBalance: 10000 })).json() as any
+    const destination = await (await post('/accounts', { name: 'Destination', initialBalance: 1000 })).json() as any
+    const transfer = await post('/transactions', {
+      accountId: source.id,
+      toAccountId: destination.id,
+      type: 'transfer',
+      amount: 2500,
+      date: '2026-07-01',
+    })
+    expect(transfer.status).toBe(201)
+
+    expect((await (await get(`/accounts/${source.id}/balance`)).json() as any).balance).toBe(7500)
+    expect((await (await get(`/accounts/${destination.id}/balance`)).json() as any).balance).toBe(3500)
   })
 })

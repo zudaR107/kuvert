@@ -23,6 +23,13 @@ fit best; add a new section if none fits.
   re-authenticated via the still-valid session, making logout look
   like it did nothing. Now navigates to schlussel's own `/logout` page
   (same-origin there) instead.
+- Stabilized the hosted-auth handoff so concurrent unauthorized requests
+  share one PKCE login redirect instead of racing to create several, and
+  keep the requested Kuvert path as the return target.
+- Kuvert's `/users/me` profile now passes through the verified Schlüssel
+  token's date-format, week-start, and timezone claims. These preferences
+  remain controlled by Schlüssel's hosted account page; Kuvert only owns
+  its service-local currency preference.
 
 ## UI
 - Modal primitive; real Accounts, Debts, and Transactions pages (previously
@@ -168,6 +175,15 @@ fit best; add a new section if none fits.
   directly to a real API (`GET`/`PUT` schlussel's `/theme`) via plain
   `fetch` - `hubOrigin` prop renamed `apiOrigin`, no more hidden iframe.
   Bumped `schloss-ui` again.
+- Date displays, date/range pickers, and calendar weekday ordering now
+  follow the authenticated profile's date-format and week-start settings.
+  Settings shows the effective values and links their ownership clearly
+  to Schlüssel rather than presenting them as Kuvert-local controls.
+- CSV import now uses a file picker, reports the imported/error totals and
+  every rejected row number, prevents duplicate in-flight submissions,
+  and ignores stale results after the import dialog is closed and reopened.
+- Account editing reports `409 Conflict` from the API with a specific
+  explanation when a transfer-linked account's currency cannot change.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
@@ -182,6 +198,26 @@ fit best; add a new section if none fits.
   `userId`, not just `accountId`, for defense in depth. Added a global
   5MB request body size limit (`hono/body-limit`) - nothing previously
   bounded the size of a pasted CSV import.
+- Transfer creation and partial updates now enforce the complete model:
+  source and destination are caller-owned, distinct accounts in the same
+  currency; a destination is required only for transfers; and transfers
+  cannot carry an envelope. Account balances and account filtering include
+  both incoming and outgoing transfer sides.
+- Transaction filters moved into the SQL query before `limit`/`offset`,
+  with inclusive, validated calendar-date bounds and deterministic ordering.
+- CSV import now validates real calendar dates, fully parsed finite positive
+  decimal amounts, 500-character notes, and strict CSV quote grammar. Valid
+  rows still import with per-row errors; malformed quote grammar rejects the
+  file without inserting anything.
+- A non-zero account opening balance and its matching income/expense
+  transaction are now one database transaction, so either both commit or
+  both roll back. Opening balance is creation-only.
+- Account currency changes are rejected while any transfer references the
+  account, preserving the same-currency transfer invariant.
+- Added authenticated `GET /export`, scoped to the caller's Kuvert-owned
+  rows (including join-table records through owned parents) and the caller's
+  service-local currency. The fixed response scope is
+  `kuvert-account-only`.
 
 ## Infrastructure
 - CI (tests + lint) on every push/PR.
@@ -255,12 +291,17 @@ fit best; add a new section if none fits.
   a new always-visible "Справка" sidebar entry (unlike the admin-only
   "Документация API" link) and the shared Footer's help link. Text
   skeleton only for now, with screenshot slots at
-  `web/public/guide/kuvert-*.png` for the user to fill in later.
+  `frontend/public/guide/kuvert-*.png` for the user to fill in later.
 - Fixed the `/help` page's "Первые шаги" numbered list rendering with no
   visible `1./2./3.` markers - just unexplained indentation. Tailwind's
   preflight base styles reset `ol`/`ul` to `list-style: none`; the page's
   own inline style set the indent (`paddingLeft`) but never restored a
   `list-style-type`. Added `listStyleType: 'decimal'` explicitly.
+- Documented stabilization contracts for transfer validation, SQL-before-
+  pagination filtering, strict/partial CSV import results, atomic opening
+  balances, transfer-linked currency conflicts, hosted profile preferences,
+  and account-scoped export. OpenAPI now publishes CSV/export/profile response
+  schemas and the relevant `400`/`404`/`409`/`413` outcomes.
 
 ## Polish
 - Distinct favicon and a fixed browser tab title (was still the literal

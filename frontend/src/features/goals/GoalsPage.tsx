@@ -6,9 +6,12 @@ import {
   Modal, Toast, handleArrowFieldNavigation,
 } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
-import { formatAmount, toMinorUnits, today } from '../../lib/format'
+import { formatAmount, formatDate, toMinorUnits, today } from '../../lib/format'
 import { validateAmount, validateDate } from '../../lib/validation'
 import { useToast } from '../../hooks/useToast'
+import {
+  getDateFieldPreferences, useUserProfile, type DateFieldPreferences, type UserProfile,
+} from '../../hooks/useUserProfile'
 
 const GOAL_FORM_ID = 'goal-form'
 const CONTRIBUTION_FORM_ID = 'contribution-form'
@@ -55,6 +58,8 @@ function defaultContributionForm(accounts: Account[]): ContributionFormValues {
 export function GoalsPage() {
   const qc = useQueryClient()
   const toast = useToast()
+  const { data: profile } = useUserProfile(false)
+  const dateFieldPreferences = getDateFieldPreferences(profile)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [contributingGoal, setContributingGoal] = useState<Goal | null>(null)
 
@@ -140,7 +145,7 @@ export function GoalsPage() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
           {goals.map((g) => (
-            <GoalCard key={g.id} goal={g} onContribute={() => setContributingGoal(g)} />
+            <GoalCard key={g.id} goal={g} profile={profile} onContribute={() => setContributingGoal(g)} />
           ))}
         </div>
       )}
@@ -156,7 +161,11 @@ export function GoalsPage() {
           variant: 'primary',
         }]}
       >
-        <GoalForm formId={GOAL_FORM_ID} onSubmit={(v) => createMutation.mutate(v)} />
+        <GoalForm
+          formId={GOAL_FORM_ID}
+          dateFieldPreferences={dateFieldPreferences}
+          onSubmit={(v) => createMutation.mutate(v)}
+        />
       </Modal>
 
       <Modal
@@ -171,11 +180,17 @@ export function GoalsPage() {
         }]}
       >
         {contributingGoal && (
-          <ContributionForm
-            formId={CONTRIBUTION_FORM_ID}
-            accounts={accounts}
-            onSubmit={(values) => contributeMutation.mutate({ goalId: contributingGoal.id, values })}
-          />
+          <>
+            <p style={{ margin: '0 0 0.875rem', color: 'var(--text-muted)', fontSize: '0.8125rem', lineHeight: 1.5 }}>
+              Пополнение отмечает прогресс цели. Оно не списывает деньги со счёта и не создаёт транзакцию.
+            </p>
+            <ContributionForm
+              formId={CONTRIBUTION_FORM_ID}
+              accounts={accounts}
+              dateFieldPreferences={dateFieldPreferences}
+              onSubmit={(values) => contributeMutation.mutate({ goalId: contributingGoal.id, values })}
+            />
+          </>
         )}
       </Modal>
 
@@ -186,7 +201,11 @@ export function GoalsPage() {
   )
 }
 
-function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: () => void }) {
+function GoalCard({ goal, profile, onContribute }: {
+  goal: Goal
+  profile: UserProfile | undefined
+  onContribute: () => void
+}) {
   const pct = Math.min(100, (goal.currentAmount / goal.targetAmount) * 100)
   const done = goal.currentAmount >= goal.targetAmount
 
@@ -207,7 +226,7 @@ function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: () => void
           <div>
             <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>{goal.name}</div>
             {goal.deadline && (
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>до {goal.deadline}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>до {formatDate(goal.deadline, profile)}</div>
             )}
           </div>
         </div>
@@ -260,8 +279,9 @@ function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: () => void
   )
 }
 
-function GoalForm({ formId, onSubmit }: {
+function GoalForm({ formId, dateFieldPreferences, onSubmit }: {
   formId: string
+  dateFieldPreferences: DateFieldPreferences
   onSubmit: (values: GoalFormValues) => void
 }) {
   const [values, setValues] = useState<GoalFormValues>(DEFAULT_GOAL_FORM)
@@ -308,6 +328,7 @@ function GoalForm({ formId, onSubmit }: {
       />
 
       <DateField
+        {...dateFieldPreferences}
         id="goal-deadline"
         label="Срок (необязательно)"
         value={values.deadline}
@@ -343,9 +364,10 @@ interface ContributionFormErrors {
   date?: string
 }
 
-function ContributionForm({ formId, accounts, onSubmit }: {
+function ContributionForm({ formId, accounts, dateFieldPreferences, onSubmit }: {
   formId: string
   accounts: Account[]
+  dateFieldPreferences: DateFieldPreferences
   onSubmit: (values: ContributionFormValues) => void
 }) {
   const [values, setValues] = useState<ContributionFormValues>(() => defaultContributionForm(accounts))
@@ -385,7 +407,7 @@ function ContributionForm({ formId, accounts, onSubmit }: {
       <Field
         as="select"
         id="contribution-account"
-        label="Счёт списания"
+        label="Счёт (для справки)"
         value={values.accountId}
         onChange={(e) => set('accountId', e.target.value)}
         required
@@ -404,6 +426,7 @@ function ContributionForm({ formId, accounts, onSubmit }: {
       />
 
       <DateField
+        {...dateFieldPreferences}
         id="contribution-date"
         label="Дата"
         value={values.date}

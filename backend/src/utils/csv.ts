@@ -5,18 +5,30 @@ export function parseCsv(text: string): string[][] {
   const rows: string[][] = []
   let row: string[] = []
   let field = ''
-  let inQuotes = false
+  let state: 'unquoted' | 'quoted' | 'after-quote' = 'unquoted'
+
+  function finishField() {
+    row.push(field)
+    field = ''
+    state = 'unquoted'
+  }
+
+  function finishRow() {
+    finishField()
+    if (row.length > 1 || row[0] !== '') rows.push(row)
+    row = []
+  }
 
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
 
-    if (inQuotes) {
+    if (state === 'quoted') {
       if (ch === '"') {
         if (text[i + 1] === '"') {
           field += '"'
           i++
         } else {
-          inQuotes = false
+          state = 'after-quote'
         }
       } else {
         field += ch
@@ -24,24 +36,35 @@ export function parseCsv(text: string): string[][] {
       continue
     }
 
+    if (state === 'after-quote') {
+      if (ch === ',') {
+        finishField()
+      } else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++
+        finishRow()
+      } else {
+        throw new Error('Invalid CSV quote grammar')
+      }
+      continue
+    }
+
     if (ch === '"') {
-      inQuotes = true
+      if (field !== '') throw new Error('Invalid CSV quote grammar')
+      state = 'quoted'
     } else if (ch === ',') {
-      row.push(field)
-      field = ''
+      finishField()
     } else if (ch === '\n' || ch === '\r') {
       if (ch === '\r' && text[i + 1] === '\n') i++
-      row.push(field)
-      field = ''
-      if (row.length > 1 || row[0] !== '') rows.push(row)
-      row = []
+      finishRow()
     } else {
       field += ch
     }
   }
 
-  if (field !== '' || row.length > 0) {
-    row.push(field)
+  if (state === 'quoted') throw new Error('Unterminated quoted CSV field')
+
+  if (field !== '' || row.length > 0 || state === 'after-quote') {
+    finishField()
     rows.push(row)
   }
 

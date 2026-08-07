@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within, waitFor } from '@testing-library/react'
+import { render, screen, within, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TransactionsPage } from '../features/transactions/TransactionsPage'
@@ -71,16 +71,27 @@ const txIncome = {
   note: null,
 }
 
+const mdyProfile = {
+  id: 'user-1',
+  email: 'test@example.com',
+  name: 'Test User',
+  currency: 'RUB',
+  weekStart: 'sunday' as const,
+  dateFormat: 'mdy' as const,
+  timezone: 'UTC',
+}
+
 // ---------------------------------------------------------------------------
 // Wrapper factory — fresh QueryClient per test
 // ---------------------------------------------------------------------------
-function createWrapper() {
+function createWrapper(profile?: typeof mdyProfile) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0 },
       mutations: { retry: false },
     },
   })
+  if (profile) queryClient.setQueryData(['userProfile'], profile)
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
@@ -129,6 +140,12 @@ function findSelectsWithAnyOptionValue(combos: HTMLSelectElement[], values: stri
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise })
+  return { promise, resolve }
 }
 
 // DateField/DateRangeField's calendar popover is portaled to
@@ -211,6 +228,137 @@ describe('TransactionsPage create button account requirement', () => {
 })
 
 // ---------------------------------------------------------------------------
+// CSV import flow promised by the help page
+// ---------------------------------------------------------------------------
+describe('TransactionsPage CSV import', () => {
+  it('opens an accessible import dialog with an account selector and CSV file input', async () => {
+    mockApi({ accounts: [accountRub, accountSecond] })
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper() })
+
+    await user.click(await screen.findByRole('button', { name: /Импорт CSV/i }))
+    const dialog = await screen.findByRole('dialog', { name: /Импорт CSV/i })
+
+    const accountSelect = within(dialog).getByLabelText(/Счёт/i) as HTMLSelectElement
+    expect(Array.from(accountSelect.options).map((option) => option.value)).toEqual(
+      expect.arrayContaining([accountRub.id, accountSecond.id]),
+    )
+    expect(within(dialog).getByLabelText(/CSV/i)).toHaveAttribute('type', 'file')
+  })
+
+  it('reads the selected file, posts the existing import payload, and surfaces per-row errors', async () => {
+    mockApi({ accounts: [accountRub, accountSecond] })
+    vi.mocked(api.post).mockResolvedValue({
+      importId: 'import-1',
+      imported: 1,
+      errors: [{ row: 3, error: 'Invalid amount: "bad"' }],
+    })
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper() })
+
+    await user.click(await screen.findByRole('button', { name: /Импорт CSV/i }))
+    const dialog = await screen.findByRole('dialog', { name: /Импорт CSV/i })
+    await user.selectOptions(within(dialog).getByLabelText(/Счёт/i), accountSecond.id)
+
+    const csv = 'date,amount,type\n2026-07-01,10.00,income\n2026-07-02,bad,expense\n'
+    await user.upload(
+      within(dialog).getByLabelText(/CSV/i),
+      new File([csv], 'statement.csv', { type: 'text/csv' }),
+    )
+    await user.click(within(dialog).getByRole('button', { name: /Импортировать/i }))
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith('/transactions/import', {
+        accountId: accountSecond.id,
+        csv,
+      })
+    })
+    expect(await screen.findByText(/Строка 3/i)).toBeInTheDocument()
+    expect(screen.getByText(/Invalid amount: "bad"/i)).toBeInTheDocument()
+  })
+
+  it('keeps a double-click import single-flight while the first request is pending', async () => {
+    mockApi({ accounts: [accountRub] })
+    vi.mocked(api.post).mockImplementation(() => new Promise(() => {}))
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper() })
+
+    await user.click(await screen.findByRole('button', { name: /Импорт CSV/i }))
+    const dialog = await screen.findByRole('dialog', { name: /Импорт CSV/i })
+    await user.upload(
+      within(dialog).getByLabelText(/CSV/i),
+      new File(['date,amount,type\n2026-07-01,10.00,income\n'], 'statement.csv', { type: 'text/csv' }),
+    )
+
+    await user.dblClick(within(dialog).getByRole('button', { name: /Импортировать/i }))
+
+    await waitFor(() => expect(api.post).toHaveBeenCalled())
+    expect(api.post).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not start a second import after closing and reopening while the first request is pending', async () => {
+    mockApi({ accounts: [accountRub] })
+    const request = deferred<{ importId: string; imported: number; errors: [] }>()
+    vi.mocked(api.post).mockReturnValue(request.promise)
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper() })
+
+    await user.click(await screen.findByRole('button', { name: /Импорт CSV/i }))
+    const firstDialog = await screen.findByRole('dialog', { name: /Импорт CSV/i })
+    const csv = 'date,amount,type\n2026-07-01,10.00,income\n'
+    await user.upload(
+      within(firstDialog).getByLabelText(/CSV/i),
+      new File([csv], 'first.csv', { type: 'text/csv' }),
+    )
+    await user.click(within(firstDialog).getByRole('button', { name: /Импортировать/i }))
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+
+    await user.click(within(firstDialog).getByRole('button', { name: 'Закрыть' }))
+    await user.click(screen.getByRole('button', { name: /Импорт CSV/i }))
+    const reopenedDialog = await screen.findByRole('dialog', { name: /Импорт CSV/i })
+    await user.upload(
+      within(reopenedDialog).getByLabelText(/CSV/i),
+      new File([csv], 'second.csv', { type: 'text/csv' }),
+    )
+    await user.click(within(reopenedDialog).getByRole('button', { name: /Импорт/ }))
+
+    await act(async () => {
+      request.resolve({ importId: 'import-1', imported: 1, errors: [] })
+      await request.promise
+    })
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not let a completed request from a closed import dialog overwrite the reopened form', async () => {
+    mockApi({ accounts: [accountRub] })
+    const request = deferred<{ importId: string; imported: number; errors: [] }>()
+    vi.mocked(api.post).mockReturnValue(request.promise)
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper() })
+
+    await user.click(await screen.findByRole('button', { name: /Импорт CSV/i }))
+    const firstDialog = await screen.findByRole('dialog', { name: /Импорт CSV/i })
+    await user.upload(
+      within(firstDialog).getByLabelText(/CSV/i),
+      new File(['date,amount,type\n2026-07-01,10.00,income\n'], 'first.csv', { type: 'text/csv' }),
+    )
+    await user.click(within(firstDialog).getByRole('button', { name: /Импортировать/i }))
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+
+    await user.click(within(firstDialog).getByRole('button', { name: 'Закрыть' }))
+    await user.click(screen.getByRole('button', { name: /Импорт CSV/i }))
+    const reopenedDialog = await screen.findByRole('dialog', { name: /Импорт CSV/i })
+
+    await act(async () => {
+      request.resolve({ importId: 'stale-import', imported: 1, errors: [] })
+      await request.promise
+    })
+    expect(within(reopenedDialog).getByLabelText(/CSV/i)).toBeInTheDocument()
+    expect(within(reopenedDialog).queryByRole('status')).not.toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Loading state
 // ---------------------------------------------------------------------------
 describe('TransactionsPage loading state', () => {
@@ -272,12 +420,14 @@ describe('TransactionsPage with transactions', () => {
     expect(container.textContent).toContain(formatAmount(txIncome.amount, accountRub.currency))
   })
 
-  it('renders a formatted date for each transaction, derived from formatDate(date)', async () => {
-    const { container } = render(<TransactionsPage />, { wrapper: createWrapper() })
+  it('renders every transaction date with the profile date format', async () => {
+    const { container } = render(<TransactionsPage />, { wrapper: createWrapper(mdyProfile) })
 
     await screen.findAllByRole('button', { name: 'Удалить транзакцию' })
-    expect(container.textContent).toContain(formatDate(txExpense.date))
-    expect(container.textContent).toContain(formatDate(txIncome.date))
+    expect(container.textContent).toContain(formatDate(txExpense.date, mdyProfile))
+    expect(container.textContent).toContain(formatDate(txIncome.date, mdyProfile))
+    expect(container.textContent).not.toContain(txExpense.date)
+    expect(container.textContent).not.toContain(txIncome.date)
   })
 
   it('renders a delete control labeled "Удалить транзакцию" for each transaction', async () => {
@@ -362,6 +512,39 @@ describe('TransactionsPage filter controls', () => {
     })
 
     expect(screen.getByLabelText('Период')).toBeInTheDocument()
+  })
+
+  it('formats and groups the transaction calendar Sunday-first for a Sunday-first profile', async () => {
+    mockApi({ accounts: [accountRub] })
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper(mdyProfile) })
+
+    await user.click(await screen.findByRole('button', { name: 'Новая транзакция' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новая транзакция' })
+    const dateField = within(dialog).getByLabelText('Дата')
+    const [year, month, day] = todayISO().split('-')
+    expect(dateField).toHaveValue(`${month}/${day}/${year}`)
+
+    await user.click(dateField)
+    const weekdayLabels = screen.getAllByText(/^(Вс|Пн|Вт|Ср|Чт|Пт|Сб)$/)
+      .map((element) => element.textContent)
+    expect(weekdayLabels).toEqual(['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'])
+
+    const firstOfMonth = new Date(Number(year), Number(month) - 1, 1)
+    const firstDay = screen.getByRole('button', { name: `${year}-${month}-01` })
+    const gridIndex = Array.from(firstDay.parentElement!.children).indexOf(firstDay)
+    expect(gridIndex).toBe(firstOfMonth.getDay())
+  })
+
+  it('groups the transaction date-range filter Sunday-first for a Sunday-first profile', async () => {
+    mockApi()
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: createWrapper(mdyProfile) })
+
+    await user.click(await screen.findByLabelText('Период'))
+
+    expect(screen.getAllByText(/^(Вс|Пн|Вт|Ср|Чт|Пт|Сб)$/).map((element) => element.textContent))
+      .toEqual(['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'])
   })
 
   it('selecting a specific account triggers a GET /transactions call whose query contains accountId=<id>', async () => {

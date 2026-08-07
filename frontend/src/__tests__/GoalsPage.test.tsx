@@ -63,6 +63,16 @@ const mockAccounts = [
   { id: 'acc-2', name: 'Наличные', type: 'cash', currency: 'RUB' },
 ]
 
+const mdyProfile = {
+  id: 'user-1',
+  email: 'test@example.com',
+  name: 'Test User',
+  currency: 'RUB',
+  weekStart: 'sunday' as const,
+  dateFormat: 'mdy' as const,
+  timezone: 'UTC',
+}
+
 // Routes GET /accounts to the accounts fixture and any other path (goals list)
 // to the provided goals array — mirrors the blanket-mock convention used
 // elsewhere in this file while still letting the contribute-modal tests see
@@ -77,12 +87,13 @@ function mockApiForGoals(goals: unknown[]) {
 // ---------------------------------------------------------------------------
 // Wrapper factory — fresh QueryClient per test
 // ---------------------------------------------------------------------------
-function createWrapper() {
+function createWrapper(profile?: typeof mdyProfile) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0 },
     },
   })
+  if (profile) queryClient.setQueryData(['userProfile'], profile)
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
@@ -168,6 +179,14 @@ describe('GoalsPage with goals', () => {
     render(<GoalsPage />, { wrapper: createWrapper() })
     await screen.findByText('Отпуск')
     expect(screen.queryByText('Целей пока нет')).not.toBeInTheDocument()
+  })
+
+  it('renders every goal deadline with the profile date format', async () => {
+    render(<GoalsPage />, { wrapper: createWrapper(mdyProfile) })
+
+    await screen.findByText('Отпуск')
+    expect(screen.getByText(/12\/31\/2024/)).toBeInTheDocument()
+    expect(screen.queryByText(new RegExp(activeGoal.deadline))).not.toBeInTheDocument()
   })
 })
 
@@ -283,6 +302,23 @@ describe('GoalsPage create-goal modal', () => {
     expect(deadlineField).not.toBeRequired()
 
     within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+  })
+
+  it('formats and groups the goal deadline Sunday-first for a Sunday-first profile', async () => {
+    mockApiForGoals([activeGoal])
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper(mdyProfile) })
+
+    await user.click(await screen.findByRole('button', { name: 'Новая цель' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новая цель' })
+    const deadlineField = within(dialog).getByLabelText('Срок (необязательно)')
+    await user.click(deadlineField)
+
+    expect(screen.getAllByText(/^(Вс|Пн|Вт|Ср|Чт|Пт|Сб)$/).map((element) => element.textContent))
+      .toEqual(['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'])
+    await user.click(screen.getByRole('button', { name: new Date().toISOString().slice(0, 10) }))
+    const [year, month, day] = new Date().toISOString().slice(0, 10).split('-')
+    expect(deadlineField).toHaveValue(`${month}/${day}/${year}`)
   })
 
   it('submitting with name and target amount (recurring unchecked) posts targetAmount in minor units, recurring: false, and recurringDay: null', async () => {
@@ -442,6 +478,22 @@ describe('GoalsPage contribute flow', () => {
     expect(dateField).toBeRequired()
 
     within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить|Пополнить/ })
+  })
+
+  it('formats and groups the contribution date Sunday-first for a Sunday-first profile', async () => {
+    mockApiForGoals([activeGoal])
+    const user = userEvent.setup()
+    render(<GoalsPage />, { wrapper: createWrapper(mdyProfile) })
+
+    await user.click(await screen.findByRole('button', { name: 'Пополнить' }))
+    const dialog = await screen.findByRole('dialog', { name: /Отпуск/ })
+    const dateField = within(dialog).getByLabelText('Дата')
+    const [year, month, day] = new Date().toISOString().slice(0, 10).split('-')
+    expect(dateField).toHaveValue(`${month}/${day}/${year}`)
+
+    await user.click(dateField)
+    expect(screen.getAllByText(/^(Вс|Пн|Вт|Ср|Чт|Пт|Сб)$/).map((element) => element.textContent))
+      .toEqual(['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'])
   })
 
   it('submitting the contribution form posts to /goals/{id}/contribute with amount in minor units, the selected accountId, and a date', async () => {

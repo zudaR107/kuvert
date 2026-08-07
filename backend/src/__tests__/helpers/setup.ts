@@ -7,6 +7,7 @@ import { transactionsRouter } from '../../features/transactions/router.js'
 import { goalsRouter } from '../../features/goals/router.js'
 import { debtsRouter } from '../../features/debts/router.js'
 import { usersRouter } from '../../features/users/router.js'
+import { exportRouter } from '../../features/export/router.js'
 
 /**
  * Build a minimal Hono app wired up with all feature routers.
@@ -29,5 +30,6 @@ export function createTestApp() {
   app.route('/goals', goalsRouter)
   app.route('/debts', debtsRouter)
   app.route('/users', usersRouter)
+  app.route('/export', exportRouter)
   return app
 }

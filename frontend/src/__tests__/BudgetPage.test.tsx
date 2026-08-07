@@ -48,16 +48,27 @@ const mockBudgetNegativeTbb = {
   toBeBudgeted: -1000, // negative → red
 }
 
+const mdyProfile = {
+  id: 'user-1',
+  email: 'test@example.com',
+  name: 'Test User',
+  currency: 'RUB',
+  weekStart: 'sunday' as const,
+  dateFormat: 'mdy' as const,
+  timezone: 'UTC',
+}
+
 // ---------------------------------------------------------------------------
 // Wrapper factory — fresh QueryClient per test
 // ---------------------------------------------------------------------------
-function createWrapper() {
+function createWrapper(profile?: typeof mdyProfile) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0 },
       mutations: { retry: false },
     },
   })
+  if (profile) queryClient.setQueryData(['userProfile'], profile)
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
@@ -159,9 +170,10 @@ describe('BudgetPage with data', () => {
     await screen.findByText('Июль 2024')
   })
 
-  it('shows the period date range', async () => {
-    render(<BudgetPage />, { wrapper: createWrapper() })
-    await screen.findByText('2024-07-01 — 2024-07-31')
+  it('shows both period dates using the profile date format', async () => {
+    render(<BudgetPage />, { wrapper: createWrapper(mdyProfile) })
+    await screen.findByText('07/01/2024 — 07/31/2024')
+    expect(screen.queryByText('2024-07-01 — 2024-07-31')).not.toBeInTheDocument()
   })
 
   it('renders the envelope table with correct column headers', async () => {
@@ -334,6 +346,22 @@ describe('BudgetPage create-period modal', () => {
     expect(periodField).toBeRequired()
 
     within(dialog).getByRole('button', { name: /Сохранить|Создать|Добавить/ })
+  })
+
+  it('formats and groups the period range Sunday-first for a Sunday-first profile', async () => {
+    vi.mocked(api.get).mockResolvedValue([])
+    const user = userEvent.setup()
+    render(<BudgetPage />, { wrapper: createWrapper(mdyProfile) })
+
+    await user.click(await screen.findByRole('button', { name: 'Создать бюджет' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый бюджетный период' })
+    const periodField = within(dialog).getByLabelText('Период')
+    const [year, month, day] = todayISO().split('-')
+    expect(periodField).toHaveValue(`${month}/${day}/${year} – ${month}/${day}/${year}`)
+
+    await user.click(periodField)
+    expect(screen.getAllByText(/^(Вс|Пн|Вт|Ср|Чт|Пт|Сб)$/).map((element) => element.textContent))
+      .toEqual(['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'])
   })
 
   it('submitting with a name posts to /periods with the name and ISO (YYYY-MM-DD) date strings', async () => {

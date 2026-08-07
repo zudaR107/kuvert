@@ -18,6 +18,17 @@
   }
 }
 
+/* The shared Calendar is currently Monday-only and has no week-start prop.
+   Rotate each visual week here for profiles that prefer Sunday without
+   changing the nested shared package. */
+html[data-week-start='sunday'] div[style*='width: 280px'] > div[style*='grid-template-columns: repeat(7'] > :not(:nth-child(7n)) {
+  transform: translateX(calc(100% + 2px));
+}
+
+html[data-week-start='sunday'] div[style*='width: 280px'] > div[style*='grid-template-columns: repeat(7'] > :nth-child(7n) {
+  transform: translateX(calc(-600% - 12px));
+}
+
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
   html, body, #root { height: 100%; margin: 0; }

@@ -18,6 +18,9 @@ export const requireAuth = createMiddleware(async (c, next) => {
       email: 'test@example.com',
       name: 'Test User',
       role: 'user' as const,
+      weekStart: null,
+      dateFormat: null,
+      timezone: null,
     })
   } else if (token === 'user2-token') {
     c.set('user', {
@@ -25,6 +28,9 @@ export const requireAuth = createMiddleware(async (c, next) => {
       email: 'test2@example.com',
       name: 'Test User 2',
       role: 'user' as const,
+      weekStart: null,
+      dateFormat: null,
+      timezone: null,
     })
   } else {
     return c.json({ error: 'Unauthorized' }, 401)

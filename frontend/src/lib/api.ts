@@ -4,12 +4,15 @@
 // raw instance) is also exported so hooks/useAuth.ts can share the exact
 // same token state via useAuthProvider's `apiClient` config.
 import { createApiClient, ApiError } from '@zudar107/schloss-ui'
+import { redirectToLogin } from './loginRedirect'
 
 export { ApiError }
 
 export const apiClient = createApiClient({
   base: '/backend',
-  onUnauthorized: () => { window.location.href = '/login' },
+  onUnauthorized: () => {
+    void redirectToLogin().catch(() => undefined)
+  },
 })
 
 export const setAccessToken = apiClient.setAccessToken

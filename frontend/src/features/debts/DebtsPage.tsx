@@ -9,6 +9,9 @@ import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits } from '../../lib/format'
 import { validateAmount } from '../../lib/validation'
 import { useToast } from '../../hooks/useToast'
+import {
+  getDateFieldPreferences, useUserProfile, type DateFieldPreferences, type UserProfile,
+} from '../../hooks/useUserProfile'
 
 const DEBT_FORM_ID = 'debt-form'
 
@@ -43,6 +46,8 @@ const DEBT_COUNTERPARTY_PLACEHOLDER = 'Имя человека'
 export function DebtsPage() {
   const qc = useQueryClient()
   const toast = useToast()
+  const { data: profile } = useUserProfile(false)
+  const dateFieldPreferences = getDateFieldPreferences(profile)
   const [settledFilter, setSettledFilter] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Debt | null>(null)
@@ -162,6 +167,7 @@ export function DebtsPage() {
             <DebtRow
               key={d.id}
               debt={d}
+              profile={profile}
               onEdit={() => openEdit(d)}
               onSettle={() => settleMutation.mutate(d.id)}
               onDelete={() => deleteMutation.mutate(d.id)}
@@ -191,6 +197,7 @@ export function DebtsPage() {
             dueDate: editing.dueDate ?? '',
             note: editing.note ?? '',
           } : DEFAULT_FORM}
+          dateFieldPreferences={dateFieldPreferences}
           onSubmit={handleSubmit}
         />
       </Modal>
@@ -213,8 +220,9 @@ function toPayload(values: DebtFormValues) {
   }
 }
 
-function DebtRow({ debt, onEdit, onSettle, onDelete }: {
+function DebtRow({ debt, profile, onEdit, onSettle, onDelete }: {
   debt: Debt
+  profile: UserProfile | undefined
   onEdit: () => void
   onSettle: () => void
   onDelete: () => void
@@ -246,7 +254,7 @@ function DebtRow({ debt, onEdit, onSettle, onDelete }: {
         </div>
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
           {owed ? 'Должны мне' : 'Я должен'}
-          {debt.dueDate && ` · до ${formatDate(debt.dueDate)}`}
+          {debt.dueDate && ` · до ${formatDate(debt.dueDate, profile)}`}
         </div>
       </button>
 
@@ -271,9 +279,10 @@ interface DebtFormErrors {
   currency?: string
 }
 
-function DebtForm({ formId, initial, onSubmit }: {
+function DebtForm({ formId, initial, dateFieldPreferences, onSubmit }: {
   formId: string
   initial: DebtFormValues
+  dateFieldPreferences: DateFieldPreferences
   onSubmit: (values: DebtFormValues) => void
 }) {
   const [values, setValues] = useState(initial)
@@ -355,6 +364,7 @@ function DebtForm({ formId, initial, onSubmit }: {
       </div>
 
       <DateField
+        {...dateFieldPreferences}
         id="debt-due-date"
         label="Срок (необязательно)"
         value={values.dueDate}

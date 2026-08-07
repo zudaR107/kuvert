@@ -57,16 +57,27 @@ const settledDebt = {
   note: null,
 }
 
+const mdyProfile = {
+  id: 'user-1',
+  email: 'test@example.com',
+  name: 'Test User',
+  currency: 'RUB',
+  weekStart: 'sunday' as const,
+  dateFormat: 'mdy' as const,
+  timezone: 'UTC',
+}
+
 // ---------------------------------------------------------------------------
 // Wrapper factory — fresh QueryClient per test
 // ---------------------------------------------------------------------------
-function createWrapper() {
+function createWrapper(profile?: typeof mdyProfile) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0 },
       mutations: { retry: false },
     },
   })
+  if (profile) queryClient.setQueryData(['userProfile'], profile)
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
@@ -227,6 +238,14 @@ describe('DebtsPage with debts', () => {
     const { container } = render(<DebtsPage />, { wrapper: createWrapper() })
     await screen.findByText('Иван Петров')
     await waitFor(() => expect(container.textContent).toMatch(/\d/))
+  })
+
+  it('renders every due date with the profile date format', async () => {
+    render(<DebtsPage />, { wrapper: createWrapper(mdyProfile) })
+
+    await screen.findByText('Иван Петров')
+    expect(screen.getByText(/06\/15\/2030/)).toBeInTheDocument()
+    expect(screen.queryByText(new RegExp(owedDebt.dueDate))).not.toBeInTheDocument()
   })
 
   it('renders a "Отметить погашенным" control for each unsettled debt', async () => {
@@ -400,6 +419,22 @@ describe('DebtsPage create flow', () => {
     const dueDateField = within(dialog).getByLabelText('Срок (необязательно)')
     expect(dueDateField).not.toBeNull()
     expect(dueDateField).not.toBeRequired()
+  })
+
+  it('formats and groups the due date Sunday-first for a Sunday-first profile', async () => {
+    const user = userEvent.setup()
+    render(<DebtsPage />, { wrapper: createWrapper(mdyProfile) })
+    await user.click(await screen.findByRole('button', { name: 'Новый долг' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новый долг' })
+    const dueDateField = within(dialog).getByLabelText('Срок (необязательно)')
+    await user.click(dueDateField)
+
+    expect(screen.getAllByText(/^(Вс|Пн|Вт|Ср|Чт|Пт|Сб)$/).map((element) => element.textContent))
+      .toEqual(['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'])
+    const today = new Date().toISOString().slice(0, 10)
+    await user.click(screen.getByRole('button', { name: today }))
+    const [year, month, day] = today.split('-')
+    expect(dueDateField).toHaveValue(`${month}/${day}/${year}`)
   })
 
   it('submitting with counterparty and amount posts to /debts with the typed counterparty, selected type, and amount in minor units', async () => {

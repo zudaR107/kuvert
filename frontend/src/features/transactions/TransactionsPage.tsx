@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { Plus, CreditCard, Receipt, Trash2 } from 'lucide-react'
+import { Plus, CreditCard, Receipt, Trash2, Upload } from 'lucide-react'
 import {
   EmptyState as SharedEmptyState, ICON_SIZE, Button, Badge, Amount, StatTile, Field,
   DateField, DateRangeField, AmountField, Modal, Toast, handleArrowFieldNavigation,
@@ -9,8 +9,12 @@ import { api } from '../../lib/api'
 import { formatAmount, formatDate, toMinorUnits, fromMinorUnits, today } from '../../lib/format'
 import { validateAmount, validateDate } from '../../lib/validation'
 import { useToast } from '../../hooks/useToast'
+import {
+  getDateFieldPreferences, useUserProfile, type DateFieldPreferences, type UserProfile,
+} from '../../hooks/useUserProfile'
 
 const TX_FORM_ID = 'transaction-form'
+const IMPORT_FORM_ID = 'transaction-import-form'
 
 type TxType = 'income' | 'expense' | 'transfer'
 
@@ -26,6 +30,12 @@ interface Transaction {
   amount: number
   date: string
   note: string | null
+}
+
+interface ImportResult {
+  importId: string
+  imported: number
+  errors: { row: number; error: string }[]
 }
 
 interface Filters {
@@ -63,9 +73,16 @@ function defaultForm(accounts: Account[]): TxFormValues {
 export function TransactionsPage() {
   const qc = useQueryClient()
   const toast = useToast()
+  const { data: profile } = useUserProfile(false)
+  const dateFieldPreferences = getDateFieldPreferences(profile)
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [importSession, setImportSession] = useState(0)
+  const importSessionRef = useRef(0)
+  const importInFlightRef = useRef<Promise<ImportResult> | null>(null)
 
   const { data: accounts = [] } = useQuery<Account[]>({
     queryKey: ['accounts'],
@@ -116,6 +133,11 @@ export function TransactionsPage() {
     onError: () => toast.showError('Не удалось удалить транзакцию'),
   })
 
+  const importMutation = useMutation({
+    mutationFn: (payload: { accountId: string; csv: string }) =>
+      api.post<ImportResult>('/transactions/import', payload),
+  })
+
   function openCreate() {
     setEditing(null)
     setModalOpen(true)
@@ -129,6 +151,39 @@ export function TransactionsPage() {
   function closeModal() {
     setModalOpen(false)
     setEditing(null)
+  }
+
+  function openImport() {
+    const session = ++importSessionRef.current
+    setImportSession(session)
+    setImportResult(null)
+    setImportModalOpen(true)
+  }
+
+  function closeImport() {
+    importSessionRef.current++
+    setImportModalOpen(false)
+    setImportResult(null)
+  }
+
+  async function submitImport(session: number, payload: { accountId: string; csv: string }) {
+    if (session !== importSessionRef.current) return
+    if (importInFlightRef.current) {
+      await importInFlightRef.current.catch(() => undefined)
+      return
+    }
+
+    const request = importMutation.mutateAsync(payload)
+    importInFlightRef.current = request
+    try {
+      const result = await request
+      void qc.invalidateQueries({ queryKey: ['transactions'] })
+      if (session === importSessionRef.current) setImportResult(result)
+    } catch {
+      if (session === importSessionRef.current) toast.showError('Не удалось импортировать CSV')
+    } finally {
+      if (importInFlightRef.current === request) importInFlightRef.current = null
+    }
   }
 
   function handleSubmit(values: TxFormValues) {
@@ -147,20 +202,31 @@ export function TransactionsPage() {
             {transactions.length} {transactions.length === 1 ? 'запись' : 'записей'}
           </p>
         </div>
-        <Button
-          variant="primary"
-          style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }}
-          onClick={openCreate}
-          disabled={accounts.length === 0}
-        >
-          <Plus size={15} /> Новая транзакция
-        </Button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '0.5rem' }}>
+          <Button
+            variant="ghost"
+            style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }}
+            onClick={openImport}
+            disabled={accounts.length === 0}
+          >
+            <Upload size={15} /> Импорт CSV
+          </Button>
+          <Button
+            variant="primary"
+            style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }}
+            onClick={openCreate}
+            disabled={accounts.length === 0}
+          >
+            <Plus size={15} /> Новая транзакция
+          </Button>
+        </div>
       </div>
 
       <TransactionFilters
         filters={filters}
         accounts={accounts}
         envelopes={envelopes}
+        dateFieldPreferences={dateFieldPreferences}
         onChange={setFilters}
       />
 
@@ -189,6 +255,7 @@ export function TransactionsPage() {
               tx={tx}
               account={accountById.get(tx.accountId)}
               envelope={tx.envelopeId ? envelopeById.get(tx.envelopeId) : undefined}
+              profile={profile}
               onEdit={() => openEdit(tx)}
               onDelete={() => deleteMutation.mutate(tx.id)}
             />
@@ -220,7 +287,23 @@ export function TransactionsPage() {
             date: editing.date,
             note: editing.note ?? '',
           } : defaultForm(accounts)}
+          dateFieldPreferences={dateFieldPreferences}
           onSubmit={handleSubmit}
+        />
+      </Modal>
+
+      <Modal
+        open={importModalOpen}
+        onClose={closeImport}
+        title="Импорт CSV"
+        icon={<Upload size={ICON_SIZE.default} strokeWidth={2} />}
+      >
+        <CsvImportForm
+          formId={IMPORT_FORM_ID}
+          accounts={accounts}
+          result={importResult}
+          pending={importMutation.isPending}
+          onSubmit={(payload) => submitImport(importSession, payload)}
         />
       </Modal>
 
@@ -228,6 +311,118 @@ export function TransactionsPage() {
         <Toast open variant={toast.toast.variant} message={toast.toast.message} onDismiss={toast.dismiss} />
       )}
     </div>
+  )
+}
+
+function readTextFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read file'))
+    reader.readAsText(file)
+  })
+}
+
+function CsvImportForm({ formId, accounts, result, pending, onSubmit }: {
+  formId: string
+  accounts: Account[]
+  result: ImportResult | null
+  pending: boolean
+  onSubmit: (payload: { accountId: string; csv: string }) => Promise<void>
+}) {
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '')
+  const [file, setFile] = useState<File | null>(null)
+  const [fileError, setFileError] = useState<string>()
+  const [reading, setReading] = useState(false)
+  const submittingRef = useRef(false)
+
+  async function submitImport() {
+    if (submittingRef.current || pending) return
+    if (!file) {
+      setFileError('Выберите CSV-файл')
+      return
+    }
+    submittingRef.current = true
+    setReading(true)
+    let csv: string
+    try {
+      csv = await readTextFile(file)
+    } catch {
+      setFileError('Не удалось прочитать файл')
+      submittingRef.current = false
+      setReading(false)
+      return
+    }
+    setReading(false)
+    try {
+      await onSubmit({ accountId, csv })
+    } finally {
+      submittingRef.current = false
+    }
+  }
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    void submitImport()
+  }
+
+  if (result) {
+    return (
+      <div aria-live="polite">
+        <p role="status" style={{ margin: 0, color: 'var(--text-primary)', fontSize: '0.875rem', fontWeight: 600 }}>
+          Импортировано: {result.imported}. Ошибок: {result.errors.length}.
+        </p>
+        {result.errors.length > 0 && (
+          <div style={{ marginTop: '1rem' }}>
+            <h3 style={{ margin: '0 0 0.5rem', color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
+              Строки, которые не удалось импортировать
+            </h3>
+            <ul style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--danger)', fontSize: '0.8125rem', lineHeight: 1.6 }}>
+              {result.errors.map((error, index) => (
+                <li key={`${error.row}-${index}`}>
+                  <strong>Строка {error.row}:</strong> {error.error}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <form id={formId} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8125rem', lineHeight: 1.5 }}>
+        Нужны столбцы date, amount и type. Можно добавить note и envelope.
+      </p>
+      <Field
+        as="select"
+        id="import-account"
+        label="Счёт"
+        value={accountId}
+        onChange={(event) => setAccountId(event.target.value)}
+        required
+      >
+        {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+      </Field>
+      <Field
+        id="import-csv"
+        label="CSV-файл"
+        type="file"
+        accept=".csv,text/csv"
+        required
+        error={fileError}
+        onChange={(event) => {
+          setFile(event.target.files?.[0] ?? null)
+          setFileError(undefined)
+        }}
+      />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.625rem' }}>
+        <Button variant="primary" disabled={reading || pending} onClick={() => void submitImport()}>
+          {reading || pending ? 'Импорт…' : 'Импортировать'}
+        </Button>
+      </div>
+    </form>
   )
 }
 
@@ -271,10 +466,11 @@ const TYPE_COLORS: Record<TxType, string> = {
   transfer: 'var(--info)',
 }
 
-function TransactionFilters({ filters, accounts, envelopes, onChange }: {
+function TransactionFilters({ filters, accounts, envelopes, dateFieldPreferences, onChange }: {
   filters: Filters
   accounts: Account[]
   envelopes: Envelope[]
+  dateFieldPreferences: DateFieldPreferences
   onChange: (filters: Filters) => void
 }) {
   function set<K extends keyof Filters>(key: K, value: Filters[K]) {
@@ -305,6 +501,7 @@ function TransactionFilters({ filters, accounts, envelopes, onChange }: {
       </div>
       <div style={{ width: 220 }}>
         <DateRangeField
+          {...dateFieldPreferences}
           id="tx-filter-range"
           label="Период"
           start={filters.from}
@@ -316,10 +513,11 @@ function TransactionFilters({ filters, accounts, envelopes, onChange }: {
   )
 }
 
-function TransactionRow({ tx, account, envelope, onEdit, onDelete }: {
+function TransactionRow({ tx, account, envelope, profile, onEdit, onDelete }: {
   tx: Transaction
   account: Account | undefined
   envelope: Envelope | undefined
+  profile: UserProfile | undefined
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -336,7 +534,7 @@ function TransactionRow({ tx, account, envelope, onEdit, onDelete }: {
           {tx.note || account?.name || 'Транзакция'}
         </div>
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          {formatDate(tx.date)}
+          {formatDate(tx.date, profile)}
           {account && ` · ${account.name}`}
           {envelope && ` · ${envelope.name}`}
         </div>
@@ -364,11 +562,12 @@ interface TxFormErrors {
   date?: string
 }
 
-function TransactionForm({ formId, accounts, envelopes, initial, onSubmit }: {
+function TransactionForm({ formId, accounts, envelopes, initial, dateFieldPreferences, onSubmit }: {
   formId: string
   accounts: Account[]
   envelopes: Envelope[]
   initial: TxFormValues
+  dateFieldPreferences: DateFieldPreferences
   onSubmit: (values: TxFormValues) => void
 }) {
   const [values, setValues] = useState(initial)
@@ -463,6 +662,7 @@ function TransactionForm({ formId, accounts, envelopes, initial, onSubmit }: {
         </div>
         <div style={{ flex: 1 }}>
           <DateField
+            {...dateFieldPreferences}
             id="tx-date"
             label="Дата"
             value={values.date}

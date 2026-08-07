@@ -19,10 +19,25 @@ export const envelopeSchema = z.object({
   sortOrder: z.number().int().default(0),
 })
 
+export const envelopeUpdateSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  categoryId: z.string().nullable().optional(),
+  icon: z.string().max(50).optional(),
+  color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
+  rolloverEnabled: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
+})
+
 export const categorySchema = z.object({
   name: z.string().min(1).max(100),
   color: z.string().regex(/^#[0-9a-f]{6}$/i).default('#6366f1'),
   sortOrder: z.number().int().default(0),
+})
+
+export const categoryUpdateSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
+  sortOrder: z.number().int().optional(),
 })
 
 // ── Categories ────────────────────────────────────────────────────
@@ -39,7 +54,7 @@ router.post('/categories', zValidator('json', categorySchema), async (c) => {
   return c.json(cat, 201)
 })
 
-router.put('/categories/:id', zValidator('json', categorySchema.partial()), async (c) => {
+router.put('/categories/:id', zValidator('json', categoryUpdateSchema), async (c) => {
   const user = c.get('user')
   const { id } = c.req.param()
   const data = c.req.valid('json')
@@ -93,7 +108,7 @@ router.post('/', zValidator('json', envelopeSchema), async (c) => {
   return c.json(envelope, 201)
 })
 
-router.put('/:id', zValidator('json', envelopeSchema.partial()), async (c) => {
+router.put('/:id', zValidator('json', envelopeUpdateSchema), async (c) => {
   const user = c.get('user')
   const { id } = c.req.param()
   const data = c.req.valid('json')

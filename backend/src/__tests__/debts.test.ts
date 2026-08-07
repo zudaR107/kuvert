@@ -114,6 +114,33 @@ describe('PUT /debts/:id', () => {
   it('returns 404 for unknown id', async () => {
     expect((await put('/debts/nope', { amount: 100 })).status).toBe(404)
   })
+
+  it('does not reset omitted defaulted fields during a partial update', async () => {
+    const debt = await (await post('/debts', {
+      counterparty: 'Carol',
+      type: 'owing',
+      amount: 3000,
+      currency: 'USD',
+      dueDate: '2027-03-15',
+      note: 'Keep these details',
+    })).json() as any
+
+    const res = await put(`/debts/${debt.id}`, { amount: 4500 })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({
+      amount: 4500,
+      currency: 'USD',
+      dueDate: '2027-03-15',
+      note: 'Keep these details',
+    })
+
+    const stored = (await (await get('/debts')).json() as any[]).find((item) => item.id === debt.id)
+    expect(stored).toMatchObject({
+      currency: 'USD',
+      dueDate: '2027-03-15',
+      note: 'Keep these details',
+    })
+  })
 })
 
 describe('DELETE /debts/:id', () => {
