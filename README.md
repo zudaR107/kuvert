@@ -54,8 +54,9 @@ This repo is a pnpm workspace with two packages:
 - **Debts** — track money owed to you or by you, independent of the budget itself.
 - **API documentation** — an admin-only OpenAPI spec (`GET /openapi.json`) and a Swagger
   UI viewer at `/docs` in the frontend app, generated from the API's own Zod schemas.
-- **Account-scoped export** — `GET /export` returns the current user's Kuvert records
-  and service-local currency preference; it never includes another user's data.
+- **Direct Kuvert data export** — Settings downloads a versioned JSON snapshot through
+  `GET /exports/me`, including local currency, archived records, and every Kuvert relation.
+  The legacy account-scoped `GET /export` remains available unchanged.
 - **Platform profile preferences** — displayed dates and calendar week starts follow
   the verified Schlüssel profile. They are shown in Kuvert settings but changed on
   Schlüssel's hosted account page.
@@ -86,11 +87,36 @@ invalid rows are skipped and returned as `{ row, error }`. Imports are not dedup
 
 ### Export response
 
-`GET /export` requires the same bearer token as the rest of the API. Its JSON response
+Kuvert retains two synchronous direct JSON contracts. `GET /export` requires the same
+bearer token as the rest of the API. Its JSON response
 contains `exportedAt`, the fixed `kuvert-account-only` scope, `currency`, and the
 `accounts`, `periods`, `categories`, `envelopes`, `envelopeBudgets`, `transactions`,
 `goals`, `goalContributions`, and `debts` arrays. The full field-level response schema
 is published in `GET /openapi.json`.
+
+`GET /exports/me` returns the canonical version 1 envelope (`version`, `service`,
+`exportedAt`, `data`), with all data reads performed in one SQLite transaction. It accepts
+an ordinary access token or a JWKS-verified RS256 export delegation with the configured
+exact issuer,
+`token_use: export`, the single `hof-service:kuvert` audience, `data:export` scope, and
+nonempty subject, job, and token IDs plus a non-expired numeric `exp`. The subject comes
+only from the verified principal, and the delegation cannot access the legacy endpoint or
+any other Kuvert API. The direct response is private, no-store, and nosniff.
+
+Neither Kuvert endpoint creates a platform ZIP. Only Schlüssel's asynchronous
+`/export-jobs` API does that, invoking this standardized endpoint from a fixed internal
+registry. Every service snapshots independently when called, so the ZIP is not one
+cross-service point-in-time transaction; retries retain successful snapshots and collect
+failed services later. If at least one service succeeds, Schlüssel can publish a partial
+archive whose `manifest.json` lists statuses, attempts, timestamps, byte counts, SHA-256
+checksums, files, and sanitized failures.
+
+Schlüssel protects ZIP status and owner-only downloads with no-store headers, a short
+artifact TTL (24 hours by default), per-user cooldown/retention limits, response-size
+bounds, a global storage quota, and a free-space reserve. Export files contain sensitive
+financial data. Kuvert exports caller-owned budgeting rows and its local currency only;
+it excludes passwords/tokens/keys, server configuration and logs, internal worker or
+audit state, other users' rows, and data owned by other Hof services.
 
 ## Local development
 
@@ -122,9 +148,9 @@ See `.env.example`. The important ones:
 | `SCHLUSSEL_WEB_URL` / `VITE_SCHLUSSEL_URL` | Schlüssel hosted frontend URL for Compose / direct Vite use (not its internal API URL) |
 | `SCHLOSS_URL` / `VITE_SCHLOSS_URL` | Platform home URL for Compose / direct Vite use |
 
-The default Compose CORS allowlist includes Schlüssel's browser origin because its
-hosted account page calls Kuvert's scoped `GET /export` with the same platform bearer
-token. Do not replace that origin with the internal `schlussel:4000` container URL.
+The default Compose CORS allowlist includes Schlüssel's hosted browser origin. It is
+distinct from the internal `schlussel:4000` container URL. Platform ZIP collection calls
+Kuvert server-to-server and does not depend on browser CORS.
 
 ## Running with Docker
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Button, Field, Toast } from '@zudar107/schloss-ui'
+import { Button, DirectExportAction, Field, Toast, downloadJson } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { useToast } from '../../hooks/useToast'
 import { useUserProfile } from '../../hooks/useUserProfile'
@@ -15,6 +15,8 @@ export function SettingsPage() {
   const toast = useToast()
   const [currency, setCurrency] = useState('RUB')
   const [saved, setSaved] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const { data: profile, isLoading } = useUserProfile()
 
@@ -35,6 +37,19 @@ export function SettingsPage() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     updateMutation.mutate(currency)
+  }
+
+  async function handleExport() {
+    setExporting(true)
+    setExportError(null)
+    try {
+      const data = await api.get('/exports/me')
+      downloadJson(data, `kuvert-export-${new Date().toISOString().slice(0, 10)}.json`)
+    } catch {
+      setExportError('Не удалось экспортировать данные')
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -94,6 +109,18 @@ export function SettingsPage() {
           </p>
         </div>
       )}
+
+      <div style={{ marginTop: '1rem' }}>
+        <DirectExportAction
+          title="Экспорт данных"
+          description="Скачайте счета, бюджеты, транзакции и остальные данные Kuvert в формате JSON. Экспорт включает архивные записи и текущую основную валюту."
+          actionLabel="Скачать данные"
+          loadingLabel="Подготовка экспорта…"
+          loading={exporting}
+          error={exportError}
+          onExport={handleExport}
+        />
+      </div>
 
       {toast.toast && (
         <Toast open variant={toast.toast.variant} message={toast.toast.message} onDismiss={toast.dismiss} />

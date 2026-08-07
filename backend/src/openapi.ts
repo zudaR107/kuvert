@@ -7,7 +7,7 @@ import { txSchema, txUpdateSchema, listQuerySchema, importSchema } from './featu
 import { goalSchema, goalUpdateSchema, contributionSchema } from './features/goals/router.js'
 import { debtSchema, debtUpdateSchema } from './features/debts/router.js'
 import { updateSchema } from './features/users/router.js'
-import { exportResponseSchema } from './features/export/router.js'
+import { exportResponseSchema, platformExportResponseSchema } from './features/export/router.js'
 
 // Purely additive/descriptive: this file only describes the API surface
 // already implemented under src/features/*/router.ts, by reusing their
@@ -20,9 +20,21 @@ registry.registerComponent('securitySchemes', 'bearerAuth', {
   type: 'http',
   scheme: 'bearer',
   bearerFormat: 'JWT',
+  description: 'Ordinary Schlüssel access token with token_use=access.',
+})
+
+registry.registerComponent('securitySchemes', 'exportDelegationAuth', {
+  type: 'http',
+  scheme: 'bearer',
+  bearerFormat: 'JWT',
+  description: 'Schlüssel export delegation with token_use=export, the exact data:export scope, and hof-service:kuvert audience.',
 })
 
 const BEARER = [{ bearerAuth: [] }]
+const EXPORT_AUTH: Array<Record<string, string[]>> = [
+  { bearerAuth: [] },
+  { exportDelegationAuth: [] },
+]
 const idParam = z.object({ id: z.string() })
 const errorSchema = z.object({ error: z.string() })
 const importResponseSchema = z.object({
@@ -278,11 +290,21 @@ registry.registerPath({
 registry.registerPath({
   method: 'get', path: '/export', tags: ['export'], summary: 'Export all data owned by the current Kuvert account',
   security: BEARER,
+  description: 'Retained synchronous direct Kuvert-only JSON contract. The response is private, no-store, and nosniff; it is not the asynchronous all-services ZIP created by Schlüssel.',
   responses: {
     200: {
       description: 'Current user\'s Kuvert data and service-local currency preference',
       content: { 'application/json': { schema: exportResponseSchema } },
     },
+  },
+})
+registry.registerPath({
+  method: 'get', path: '/exports/me', tags: ['export'], summary: 'Export the subject\'s complete Kuvert data',
+  security: EXPORT_AUTH,
+  description: 'Synchronous direct Kuvert JSON endpoint used by the Settings download and by Schlüssel\'s asynchronous ZIP collector. Accepts either an ordinary access token or a JWKS-verified export delegation with the exact issuer, token_use=export, single hof-service:kuvert audience, data:export scope, nonempty subject/job/token IDs, and a non-expired numeric expiry. The subject is always taken from the verified token, and delegations are rejected by ordinary routes. Returns the canonical version 1 envelope with local currency, archived records, and all Kuvert relations read in one local SQLite transaction. This is not a cross-service point-in-time snapshot. Passwords/tokens/keys, runtime configuration, logs, internal operational state, other users, and other services are excluded. The response is private, no-store, and nosniff.',
+  responses: {
+    200: jsonResponse('Canonical Kuvert export envelope', platformExportResponseSchema),
+    401: jsonResponse('Missing, invalid, expired, or incorrectly scoped token', errorSchema),
   },
 })
 

@@ -19,6 +19,12 @@ describe('openApiDocument', () => {
       type: 'http',
       scheme: 'bearer',
     })
+    expect(openApiDocument.components?.securitySchemes?.['exportDelegationAuth']).toMatchObject({
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      description: expect.stringContaining('hof-service:kuvert'),
+    })
   })
 
   it('documents every feature area', () => {
@@ -31,7 +37,7 @@ describe('openApiDocument', () => {
       '/goals', '/goals/{id}', '/goals/{id}/contribute', '/goals/{id}/contributions',
       '/debts', '/debts/{id}',
       '/users/me',
-      '/export',
+      '/export', '/exports/me',
     ]) {
       expect(paths).toContain(path)
     }
@@ -129,11 +135,39 @@ describe('openApiDocument', () => {
     expect(schema.properties.currency).toMatchObject({ minLength: 3, maxLength: 3 })
   })
 
+  it('documents the strict standardized export and both bearer alternatives', () => {
+    const operation = openApiDocument.paths?.['/exports/me']?.get
+    expect(operation?.security).toEqual([
+      { bearerAuth: [] },
+      { exportDelegationAuth: [] },
+    ])
+
+    const response = operation?.responses?.['200'] as any
+    const schema = response?.content?.['application/json']?.schema
+    expect(schema).toMatchObject({
+      type: 'object',
+      additionalProperties: false,
+      required: expect.arrayContaining(['version', 'service', 'exportedAt', 'data']),
+      properties: {
+        version: expect.objectContaining({ enum: ['1'] }),
+        service: expect.objectContaining({ enum: ['kuvert'] }),
+        exportedAt: expect.objectContaining({ type: 'string', format: 'date-time' }),
+        data: expect.objectContaining({
+          type: 'object',
+          additionalProperties: false,
+        }),
+      },
+    })
+  })
+
   it('marks every documented operation as requiring bearer auth', () => {
-    for (const [, item] of Object.entries(openApiDocument.paths ?? {})) {
+    for (const [path, item] of Object.entries(openApiDocument.paths ?? {})) {
       for (const method of ['get', 'post', 'put', 'delete'] as const) {
         const operation = item[method]
-        if (operation) expect(operation.security).toEqual([{ bearerAuth: [] }])
+        if (!operation) continue
+        expect(operation.security).toEqual(path === '/exports/me'
+          ? [{ bearerAuth: [] }, { exportDelegationAuth: [] }]
+          : [{ bearerAuth: [] }])
       }
     }
   })

@@ -4,6 +4,40 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SettingsPage } from '../features/settings/SettingsPage'
 
+const sharedExportMocks = vi.hoisted(() => ({
+  downloadJson: vi.fn(),
+  directExportAction: vi.fn(),
+}))
+
+vi.mock('@zudar107/schloss-ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@zudar107/schloss-ui')>()
+  return {
+    ...actual,
+    downloadJson: sharedExportMocks.downloadJson,
+    DirectExportAction: (props: {
+      title: string
+      description: string
+      actionLabel: string
+      loadingLabel: string
+      loading?: boolean
+      error?: string | null
+      onExport: () => void
+    }) => {
+      sharedExportMocks.directExportAction(props)
+      return (
+        <section>
+          <h2>{props.title}</h2>
+          <p>{props.description}</p>
+          <button type="button" disabled={props.loading} onClick={props.onExport}>
+            {props.loading ? props.loadingLabel : props.actionLabel}
+          </button>
+          {props.error && <p role="alert">{props.error}</p>}
+        </section>
+      )
+    },
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Mock the api module
 // ---------------------------------------------------------------------------
@@ -62,6 +96,42 @@ beforeEach(() => {
   vi.mocked(api.post).mockReset()
   vi.mocked(api.put).mockReset()
   vi.mocked(api.delete).mockReset()
+  sharedExportMocks.downloadJson.mockReset()
+  sharedExportMocks.directExportAction.mockClear()
+})
+
+describe('SettingsPage data export', () => {
+  it('uses the shared direct-export action and JSON download helper for GET /exports/me', async () => {
+    const exportedData = {
+      version: '1',
+      service: 'kuvert',
+      exportedAt: '2026-08-07T12:00:00.000Z',
+      data: { currency: 'RUB', accounts: [] },
+    }
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path === '/users/me') return Promise.resolve(profileRub)
+      if (path === '/exports/me') return Promise.resolve(exportedData)
+      return Promise.reject(new Error(`Unexpected GET ${path}`))
+    })
+    const user = userEvent.setup()
+
+    render(<SettingsPage />, { wrapper: createWrapper() })
+    await screen.findByText('Иван Петров')
+    const button = screen.getByRole('button', { name: /экспорт|скачать.*данн/i })
+    await user.click(button)
+
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledWith('/exports/me'))
+    expect(sharedExportMocks.directExportAction).toHaveBeenCalledWith(expect.objectContaining({
+      title: expect.stringMatching(/данн|экспорт/i),
+      description: expect.stringMatching(/json|счет|бюджет|транзакц/i),
+      actionLabel: expect.stringMatching(/экспорт|скачать/i),
+      onExport: expect.any(Function),
+    }))
+    expect(sharedExportMocks.downloadJson).toHaveBeenCalledWith(
+      exportedData,
+      expect.stringMatching(/^kuvert-export-\d{4}-\d{2}-\d{2}\.json$/),
+    )
+  })
 })
 
 // ---------------------------------------------------------------------------
