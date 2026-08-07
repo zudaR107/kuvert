@@ -1,12 +1,13 @@
 import { OpenAPIRegistry, OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi'
 import { z } from 'zod'
-import { accountSchema } from './features/accounts/router.js'
+import { accountSchema, accountUpdateSchema } from './features/accounts/router.js'
 import { periodSchema, allocationSchema } from './features/periods/router.js'
-import { envelopeSchema, categorySchema } from './features/envelopes/router.js'
-import { txSchema, listQuerySchema, importSchema } from './features/transactions/router.js'
-import { goalSchema, contributionSchema } from './features/goals/router.js'
-import { debtSchema } from './features/debts/router.js'
+import { envelopeSchema, envelopeUpdateSchema, categorySchema, categoryUpdateSchema } from './features/envelopes/router.js'
+import { txSchema, txUpdateSchema, listQuerySchema, importSchema } from './features/transactions/router.js'
+import { goalSchema, goalUpdateSchema, contributionSchema } from './features/goals/router.js'
+import { debtSchema, debtUpdateSchema } from './features/debts/router.js'
 import { updateSchema } from './features/users/router.js'
+import { exportResponseSchema } from './features/export/router.js'
 
 // Purely additive/descriptive: this file only describes the API surface
 // already implemented under src/features/*/router.ts, by reusing their
@@ -23,8 +24,30 @@ registry.registerComponent('securitySchemes', 'bearerAuth', {
 
 const BEARER = [{ bearerAuth: [] }]
 const idParam = z.object({ id: z.string() })
+const errorSchema = z.object({ error: z.string() })
+const importResponseSchema = z.object({
+  importId: z.string(),
+  imported: z.number().int().nonnegative(),
+  errors: z.array(z.object({
+    row: z.number().int().min(2),
+    error: z.string(),
+  })),
+})
+const userProfileSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string(),
+  currency: z.string().length(3),
+  weekStart: z.enum(['monday', 'sunday']).nullable(),
+  dateFormat: z.enum(['dmy', 'mdy', 'ymd']).nullable(),
+  timezone: z.string().nullable(),
+})
 
-function crud(basePath: string, tag: string, createSchema: z.ZodObject) {
+function jsonResponse(description: string, schema: z.ZodType) {
+  return { description, content: { 'application/json': { schema } } }
+}
+
+function crud(basePath: string, tag: string, createSchema: z.ZodObject, updateSchema: z.ZodObject) {
   registry.registerPath({
     method: 'get', path: basePath, tags: [tag], summary: `List ${tag}`,
     security: BEARER, responses: { 200: { description: 'OK' } },
@@ -32,14 +55,24 @@ function crud(basePath: string, tag: string, createSchema: z.ZodObject) {
   registry.registerPath({
     method: 'post', path: basePath, tags: [tag], summary: `Create a ${tag.slice(0, -1)}`,
     security: BEARER,
+    description: tag === 'accounts'
+      ? 'Amounts are integer minor units. A non-zero initialBalance is atomically recorded as an opening income or expense transaction on the account creation date; it cannot be changed later.'
+      : undefined,
     request: { body: { content: { 'application/json': { schema: createSchema } } } },
     responses: { 201: { description: 'Created' } },
   })
   registry.registerPath({
     method: 'put', path: `${basePath}/{id}`, tags: [tag], summary: `Update a ${tag.slice(0, -1)}`,
     security: BEARER,
-    request: { params: idParam, body: { content: { 'application/json': { schema: createSchema.partial() } } } },
-    responses: { 200: { description: 'OK' }, 404: { description: 'Not found' } },
+    description: tag === 'accounts'
+      ? 'initialBalance is creation-only. Changing currency returns 409 while the account is the source or destination of any transfer.'
+      : undefined,
+    request: { params: idParam, body: { content: { 'application/json': { schema: updateSchema } } } },
+    responses: {
+      200: { description: 'OK' },
+      404: { description: 'Not found' },
+      ...(tag === 'accounts' ? { 409: jsonResponse('Account is linked to a transfer', errorSchema) } : {}),
+    },
   })
   registry.registerPath({
     method: 'delete', path: `${basePath}/{id}`, tags: [tag], summary: `Delete/archive a ${tag.slice(0, -1)}`,
@@ -49,7 +82,7 @@ function crud(basePath: string, tag: string, createSchema: z.ZodObject) {
 }
 
 // ── Accounts ─────────────────────────────────────────────────────────────
-crud('/accounts', 'accounts', accountSchema)
+crud('/accounts', 'accounts', accountSchema, accountUpdateSchema)
 registry.registerPath({
   method: 'post', path: '/accounts/{id}/restore', tags: ['accounts'], summary: 'Unarchive an account',
   security: BEARER, request: { params: idParam }, responses: { 200: { description: 'OK' } },
@@ -103,14 +136,14 @@ registry.registerPath({
 registry.registerPath({
   method: 'put', path: '/envelopes/categories/{id}', tags: ['envelopes'], summary: 'Update an envelope category',
   security: BEARER,
-  request: { params: idParam, body: { content: { 'application/json': { schema: categorySchema.partial() } } } },
+  request: { params: idParam, body: { content: { 'application/json': { schema: categoryUpdateSchema } } } },
   responses: { 200: { description: 'OK' } },
 })
 registry.registerPath({
   method: 'delete', path: '/envelopes/categories/{id}', tags: ['envelopes'], summary: 'Delete an envelope category',
   security: BEARER, request: { params: idParam }, responses: { 200: { description: 'OK' } },
 })
-crud('/envelopes', 'envelopes', envelopeSchema)
+crud('/envelopes', 'envelopes', envelopeSchema, envelopeUpdateSchema)
 registry.registerPath({
   method: 'post', path: '/envelopes/{id}/restore', tags: ['envelopes'], summary: 'Unarchive an envelope',
   security: BEARER, request: { params: idParam }, responses: { 200: { description: 'OK' } },
@@ -119,25 +152,47 @@ registry.registerPath({
 // ── Transactions ─────────────────────────────────────────────────────────
 registry.registerPath({
   method: 'get', path: '/transactions', tags: ['transactions'], summary: 'List transactions',
-  security: BEARER, request: { query: listQuerySchema }, responses: { 200: { description: 'OK' } },
+  security: BEARER,
+  description: 'Filters are applied before limit/offset pagination. Date bounds are inclusive. An accountId match includes transfers where that account is either the source or destination. Results are ordered by date, creation time, then id, all descending.',
+  request: { query: listQuerySchema },
+  responses: {
+    200: { description: 'OK' },
+    400: { description: 'Invalid filter or pagination value' },
+  },
 })
 registry.registerPath({
   method: 'post', path: '/transactions', tags: ['transactions'], summary: 'Create a transaction',
   security: BEARER,
+  description: 'Amounts are positive integer minor units. Every referenced account or envelope must belong to the caller. Transfers require a distinct destination account in the same currency and cannot have an envelope; non-transfers cannot have a destination account.',
   request: { body: { content: { 'application/json': { schema: txSchema } } } },
-  responses: { 201: { description: 'Created' } },
+  responses: {
+    201: { description: 'Created' },
+    400: { description: 'Invalid request body or transaction/transfer combination' },
+    404: jsonResponse('Referenced account or envelope not found', errorSchema),
+  },
 })
 registry.registerPath({
   method: 'post', path: '/transactions/import', tags: ['transactions'], summary: 'Bulk-import transactions from CSV',
   security: BEARER,
+  description: 'Imports one selected account from a strict comma-delimited CSV. Header names are case-insensitive and may be reordered; date, amount, and type are required, while note and envelope are optional. Dates must be real YYYY-MM-DD calendar dates, amounts must be positive decimal major-unit values, type must be income or expense, and notes are limited to 500 characters. Quoted fields support commas, newlines, and doubled quotes; malformed quote grammar rejects the entire file. Valid rows are imported even when other rows fail, and failures are returned with one-based CSV row numbers. Envelope names match existing caller-owned envelopes case-insensitively; unknown names remain unlinked. Transfers and deduplication are not supported.',
   request: { body: { content: { 'application/json': { schema: importSchema } } } },
-  responses: { 200: { description: 'OK' } },
+  responses: {
+    201: jsonResponse('Import completed, possibly with per-row errors', importResponseSchema),
+    400: { description: 'Invalid request body, empty CSV, missing required columns, or invalid CSV quote grammar' },
+    404: jsonResponse('Selected account not found', errorSchema),
+    413: jsonResponse('Request body exceeds 5 MiB', errorSchema),
+  },
 })
 registry.registerPath({
   method: 'put', path: '/transactions/{id}', tags: ['transactions'], summary: 'Update a transaction',
   security: BEARER,
-  request: { params: idParam, body: { content: { 'application/json': { schema: txSchema.partial() } } } },
-  responses: { 200: { description: 'OK' } },
+  description: 'Partial updates are validated against the complete resulting transaction using the same ownership, transfer-combination, and same currency rules as creation. Changing away from transfer clears toAccountId; changing to transfer clears envelopeId.',
+  request: { params: idParam, body: { content: { 'application/json': { schema: txUpdateSchema } } } },
+  responses: {
+    200: { description: 'OK' },
+    400: { description: 'Invalid request body or transaction/transfer combination' },
+    404: jsonResponse('Transaction or referenced resource not found', errorSchema),
+  },
 })
 registry.registerPath({
   method: 'delete', path: '/transactions/{id}', tags: ['transactions'], summary: 'Delete a transaction',
@@ -158,7 +213,7 @@ registry.registerPath({
 registry.registerPath({
   method: 'put', path: '/goals/{id}', tags: ['goals'], summary: 'Update a goal',
   security: BEARER,
-  request: { params: idParam, body: { content: { 'application/json': { schema: goalSchema.partial() } } } },
+  request: { params: idParam, body: { content: { 'application/json': { schema: goalUpdateSchema } } } },
   responses: { 200: { description: 'OK' } },
 })
 registry.registerPath({
@@ -192,7 +247,7 @@ registry.registerPath({
   security: BEARER,
   request: {
     params: idParam,
-    body: { content: { 'application/json': { schema: debtSchema.partial().extend({ settled: z.boolean().optional() }) } } },
+    body: { content: { 'application/json': { schema: debtUpdateSchema } } },
   },
   responses: { 200: { description: 'OK' } },
 })
@@ -204,17 +259,39 @@ registry.registerPath({
 // ── Users ────────────────────────────────────────────────────────────────
 registry.registerPath({
   method: 'get', path: '/users/me', tags: ['users'], summary: 'Get the current user\'s profile',
-  security: BEARER, responses: { 200: { description: 'OK' } },
+  security: BEARER,
+  description: 'Returns Kuvert\'s service-local currency plus week-start, date-format, and timezone preferences from the verified Schlüssel token. Regional preferences are read-only here and are changed on Schlüssel\'s hosted account page.',
+  responses: { 200: jsonResponse('Current profile and regional preferences', userProfileSchema) },
 })
 registry.registerPath({
   method: 'put', path: '/users/me', tags: ['users'], summary: 'Update currency preference',
   security: BEARER,
+  description: 'Updates only Kuvert\'s three-character service-local currency. Regional preferences remain controlled by Schlüssel and are returned unchanged from the verified token.',
   request: { body: { content: { 'application/json': { schema: updateSchema } } } },
-  responses: { 200: { description: 'OK' } },
+  responses: {
+    200: jsonResponse('Updated profile', userProfileSchema),
+    400: { description: 'Invalid currency payload' },
+  },
+})
+
+// ── Export ───────────────────────────────────────────────────────────────
+registry.registerPath({
+  method: 'get', path: '/export', tags: ['export'], summary: 'Export all data owned by the current Kuvert account',
+  security: BEARER,
+  responses: {
+    200: {
+      description: 'Current user\'s Kuvert data and service-local currency preference',
+      content: { 'application/json': { schema: exportResponseSchema } },
+    },
+  },
 })
 
 export const openApiDocument = new OpenApiGeneratorV3(registry.definitions).generateDocument({
   openapi: '3.0.0',
-  info: { title: 'Kuvert API', version: '0.1.0' },
+  info: {
+    title: 'Kuvert API',
+    version: '0.1.0',
+    description: 'Bearer tokens are obtained through Schlüssel\'s hosted Authorization Code + PKCE login flow. Kuvert has no local login form. The OpenAPI document itself is available only to authenticated administrators.',
+  },
   servers: [{ url: '/' }],
 })

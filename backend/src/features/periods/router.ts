@@ -6,14 +6,15 @@ import { createId } from '@paralleldrive/cuid2'
 import { db } from '../../db/index.js'
 import { periods, envelopes, envelopeBudgets, transactions, type Period } from '../../db/schema.js'
 import { requireAuth } from '../../middleware/auth.js'
+import { isoDateSchema } from '../../utils/date.js'
 
 const router = new Hono()
 router.use('*', requireAuth)
 
 export const periodSchema = z.object({
   name: z.string().min(1).max(100),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startDate: isoDateSchema,
+  endDate: isoDateSchema,
 })
 
 // Rollover is computed lazily, on read, rather than via an explicit

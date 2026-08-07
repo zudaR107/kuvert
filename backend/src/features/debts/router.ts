@@ -6,6 +6,7 @@ import { createId } from '@paralleldrive/cuid2'
 import { db } from '../../db/index.js'
 import { debts } from '../../db/schema.js'
 import { requireAuth } from '../../middleware/auth.js'
+import { isoDateSchema } from '../../utils/date.js'
 
 const router = new Hono()
 router.use('*', requireAuth)
@@ -15,8 +16,18 @@ export const debtSchema = z.object({
   type: z.enum(['owed', 'owing']),
   amount: z.number().int().positive(),
   currency: z.string().length(3).default('RUB'),
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
+  dueDate: isoDateSchema.nullable().default(null),
   note: z.string().max(500).nullable().default(null),
+})
+
+export const debtUpdateSchema = z.object({
+  counterparty: z.string().min(1).max(100).optional(),
+  type: z.enum(['owed', 'owing']).optional(),
+  amount: z.number().int().positive().optional(),
+  currency: z.string().length(3).optional(),
+  dueDate: isoDateSchema.nullable().optional(),
+  note: z.string().max(500).nullable().optional(),
+  settled: z.boolean().optional(),
 })
 
 router.get('/', async (c) => {
@@ -34,7 +45,7 @@ router.post('/', zValidator('json', debtSchema), async (c) => {
   return c.json(debt, 201)
 })
 
-router.put('/:id', zValidator('json', debtSchema.partial().extend({ settled: z.boolean().optional() })), async (c) => {
+router.put('/:id', zValidator('json', debtUpdateSchema), async (c) => {
   const user = c.get('user')
   const { id } = c.req.param()
   const data = c.req.valid('json')

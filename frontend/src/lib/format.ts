@@ -1,3 +1,6 @@
+import { formatDate as formatProfileDate } from '@zudar107/schloss-ui'
+import type { UserProfile } from '../hooks/useUserProfile'
+
 // All amounts are stored as integer minor units (kopecks/cents).
 // These helpers convert to/from display format.
 
@@ -19,7 +22,8 @@ export function fromMinorUnits(minor: number): number {
   return minor / 100
 }
 
-export function formatDate(iso: string): string {
+export function formatDate(iso: string, profile?: Pick<UserProfile, 'dateFormat' | 'timezone'> | null): string {
+  if (profile) return formatProfileDate(iso, profile)
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 

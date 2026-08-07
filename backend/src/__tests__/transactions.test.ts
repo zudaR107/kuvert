@@ -3,8 +3,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 vi.mock('../db/index.js', async () => await import('./helpers/db.js'))
 vi.mock('../middleware/auth.js', async () => await import('./helpers/auth-mock.js'))
 
-import { cleanDb } from './helpers/db.js'
+import { cleanDb, db } from './helpers/db.js'
 import { createTestApp } from './helpers/setup.js'
+import { transactions } from '../db/schema.js'
 
 const app = createTestApp()
 
@@ -85,6 +86,69 @@ describe('POST /transactions', () => {
     expect((await res.json() as any).type).toBe('transfer')
   })
 
+  it('rejects a transfer without a destination account', async () => {
+    const from = await mkAccount('From')
+    const res = await post('/transactions', {
+      accountId: from.id,
+      type: 'transfer',
+      amount: 2000,
+      date: '2026-07-03',
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects a transfer to an unknown destination account', async () => {
+    const from = await mkAccount('From')
+    const res = await post('/transactions', {
+      accountId: from.id,
+      toAccountId: 'missing-account',
+      type: 'transfer',
+      amount: 2000,
+      date: '2026-07-03',
+    })
+    expect(res.status).toBe(404)
+  })
+
+  it('rejects a transfer to an account owned by another user', async () => {
+    const from = await mkAccount('From')
+    const other = await (await post2('/accounts', { name: 'Other User Account' })).json() as any
+    const res = await post('/transactions', {
+      accountId: from.id,
+      toAccountId: other.id,
+      type: 'transfer',
+      amount: 2000,
+      date: '2026-07-03',
+    })
+    expect(res.status).toBe(404)
+  })
+
+  it('rejects a transfer whose destination is its source account', async () => {
+    const account = await mkAccount('Same Account')
+    const res = await post('/transactions', {
+      accountId: account.id,
+      toAccountId: account.id,
+      type: 'transfer',
+      amount: 2000,
+      date: '2026-07-03',
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects a transfer between accounts with different currencies', async () => {
+    const rub = await (await post('/accounts', { name: 'Roubles', currency: 'RUB' })).json() as any
+    const usd = await (await post('/accounts', { name: 'Dollars', currency: 'USD' })).json() as any
+
+    const res = await post('/transactions', {
+      accountId: rub.id,
+      toAccountId: usd.id,
+      type: 'transfer',
+      amount: 2000,
+      date: '2026-07-03',
+    })
+
+    expect(res.status).toBe(400)
+  })
+
   it('returns 400 for missing required fields', async () => {
     const res = await post('/transactions', { type: 'income', amount: 100 })
     expect(res.status).toBe(400)
@@ -113,6 +177,21 @@ describe('GET /transactions with filters', () => {
     const body = await res.json() as any[]
     expect(body).toHaveLength(1)
     expect(body[0]!.accountId).toBe(a1.id)
+  })
+
+  it('includes incoming transfers when filtering by the destination account', async () => {
+    const source = await mkAccount('Source')
+    const destination = await mkAccount('Destination')
+    const transfer = await (await post('/transactions', {
+      accountId: source.id,
+      toAccountId: destination.id,
+      type: 'transfer',
+      amount: 2500,
+      date: '2026-07-01',
+    })).json() as any
+
+    const body = await (await get(`/transactions?accountId=${destination.id}`)).json() as any[]
+    expect(body.map((tx) => tx.id)).toContain(transfer.id)
   })
 
   it('filters by type', async () => {
@@ -149,6 +228,53 @@ describe('GET /transactions with filters', () => {
     expect(body).toHaveLength(1)
     expect(body[0]!.envelopeId).toBe(env.id)
   })
+
+  it('applies filters before limit and offset', async () => {
+    const acct = await mkAccount()
+    await post('/transactions', { accountId: acct.id, type: 'expense', amount: 100, date: '2026-07-05' })
+    await post('/transactions', { accountId: acct.id, type: 'income', amount: 200, date: '2026-07-04' })
+    await post('/transactions', { accountId: acct.id, type: 'expense', amount: 300, date: '2026-07-03' })
+    await post('/transactions', { accountId: acct.id, type: 'income', amount: 400, date: '2026-07-02' })
+    await post('/transactions', { accountId: acct.id, type: 'expense', amount: 500, date: '2026-07-01' })
+
+    const first = await (await get('/transactions?type=expense&limit=1')).json() as any[]
+    expect(first.map((tx) => tx.amount)).toEqual([100])
+
+    const second = await (await get('/transactions?type=expense&limit=1&offset=1')).json() as any[]
+    expect(second.map((tx) => tx.amount)).toEqual([300])
+
+    const third = await (await get('/transactions?type=expense&limit=1&offset=2')).json() as any[]
+    expect(third.map((tx) => tx.amount)).toEqual([500])
+  })
+
+  it('uses a deterministic tie-breaker when date and creation time are equal', async () => {
+    const acct = await mkAccount()
+    const createdAt = new Date('2026-07-01T12:00:00.000Z')
+    await db.insert(transactions).values([
+      {
+        id: 'same-time-a', userId: 'user-1', accountId: acct.id, envelopeId: null,
+        toAccountId: null, type: 'income', amount: 100, date: '2026-07-01',
+        note: null, importId: null, createdAt,
+      },
+      {
+        id: 'same-time-b', userId: 'user-1', accountId: acct.id, envelopeId: null,
+        toAccountId: null, type: 'income', amount: 200, date: '2026-07-01',
+        note: null, importId: null, createdAt,
+      },
+    ])
+
+    const body = await (await get('/transactions')).json() as any[]
+    expect(body.map((tx) => tx.id)).toEqual(['same-time-b', 'same-time-a'])
+  })
+
+  it.each([
+    '/transactions?from=July-01-2026',
+    '/transactions?to=2026-7-31',
+    '/transactions?from=2026-02-30',
+    '/transactions?from=2026-08-01&to=2026-07-31',
+  ])('rejects an invalid date filter range: %s', async (path) => {
+    expect((await get(path)).status).toBe(400)
+  })
 })
 
 describe('PUT /transactions/:id', () => {
@@ -163,6 +289,104 @@ describe('PUT /transactions/:id', () => {
   it('returns 404 for unknown id', async () => {
     const res = await put('/transactions/nope', { amount: 100 })
     expect(res.status).toBe(404)
+  })
+
+  it('rejects changing a non-transfer into a transfer without a destination', async () => {
+    const acct = await mkAccount()
+    const tx = await (await post('/transactions', {
+      accountId: acct.id,
+      type: 'expense',
+      amount: 100,
+      date: '2026-07-01',
+    })).json() as any
+
+    expect((await put(`/transactions/${tx.id}`, { type: 'transfer' })).status).toBe(400)
+  })
+
+  it('rejects a partial update that makes a transfer destination equal its source', async () => {
+    const source = await mkAccount('Source')
+    const destination = await mkAccount('Destination')
+    const tx = await (await post('/transactions', {
+      accountId: source.id,
+      toAccountId: destination.id,
+      type: 'transfer',
+      amount: 100,
+      date: '2026-07-01',
+    })).json() as any
+
+    expect((await put(`/transactions/${tx.id}`, { accountId: destination.id })).status).toBe(400)
+  })
+
+  it('rejects clearing the destination from an existing transfer', async () => {
+    const source = await mkAccount('Source')
+    const destination = await mkAccount('Destination')
+    const tx = await (await post('/transactions', {
+      accountId: source.id,
+      toAccountId: destination.id,
+      type: 'transfer',
+      amount: 100,
+      date: '2026-07-01',
+    })).json() as any
+
+    expect((await put(`/transactions/${tx.id}`, { toAccountId: null })).status).toBe(400)
+  })
+
+  it('clears toAccountId when changing a transfer to a non-transfer type', async () => {
+    const source = await mkAccount('Source')
+    const destination = await mkAccount('Destination')
+    const tx = await (await post('/transactions', {
+      accountId: source.id,
+      toAccountId: destination.id,
+      type: 'transfer',
+      amount: 100,
+      date: '2026-07-01',
+    })).json() as any
+
+    const updated = await (await put(`/transactions/${tx.id}`, { type: 'expense' })).json() as any
+    expect(updated).toMatchObject({ type: 'expense', toAccountId: null })
+    expect(await (await get('/transactions')).json()).toEqual([
+      expect.objectContaining({ id: tx.id, type: 'expense', toAccountId: null }),
+    ])
+  })
+
+  it('clears envelopeId when changing a transaction to a transfer', async () => {
+    const source = await mkAccount('Source')
+    const destination = await mkAccount('Destination')
+    const envelope = await (await post('/envelopes', { name: 'Food' })).json() as any
+    const tx = await (await post('/transactions', {
+      accountId: source.id,
+      envelopeId: envelope.id,
+      type: 'expense',
+      amount: 100,
+      date: '2026-07-01',
+    })).json() as any
+
+    const updated = await (await put(`/transactions/${tx.id}`, {
+      type: 'transfer',
+      toAccountId: destination.id,
+    })).json() as any
+    expect(updated).toMatchObject({ type: 'transfer', envelopeId: null })
+    expect(await (await get('/transactions')).json()).toEqual([
+      expect.objectContaining({ id: tx.id, type: 'transfer', envelopeId: null }),
+    ])
+  })
+
+  it('rejects updating a transfer to use a destination with a different currency', async () => {
+    const source = await (await post('/accounts', { name: 'Source', currency: 'RUB' })).json() as any
+    const rubDestination = await (await post('/accounts', { name: 'RUB destination', currency: 'RUB' })).json() as any
+    const usdDestination = await (await post('/accounts', { name: 'USD destination', currency: 'USD' })).json() as any
+    const tx = await (await post('/transactions', {
+      accountId: source.id,
+      toAccountId: rubDestination.id,
+      type: 'transfer',
+      amount: 100,
+      date: '2026-07-01',
+    })).json() as any
+
+    expect((await put(`/transactions/${tx.id}`, { toAccountId: usdDestination.id })).status).toBe(400)
+    expect(await (await get('/transactions')).json()).toEqual([
+      expect.objectContaining({ id: tx.id, toAccountId: rubDestination.id }),
+    ])
   })
 })
 
@@ -359,6 +583,38 @@ describe('POST /transactions/import', () => {
     expect(list.some((t: any) => t.date === '2026-07-06')).toBe(true)
   })
 
+  it.each(['12.34 trailing', 'Infinity', '1e309'])(
+    'rejects a non-finite or partially parsed amount: %s',
+    async (amount) => {
+      const acct = await mkAccount()
+      const res = await importTx({
+        accountId: acct.id,
+        csv: `date,amount,type\n2026-07-01,${amount},income\n`,
+      })
+
+      expect(res.status).toBe(201)
+      expect(await res.json()).toMatchObject({ imported: 0, errors: [expect.objectContaining({ row: 2 })] })
+      expect(await (await get(`/transactions?accountId=${acct.id}`)).json()).toEqual([])
+    },
+  )
+
+  it('rejects impossible calendar dates while accepting a real leap day', async () => {
+    const acct = await mkAccount()
+    const csv = [
+      'date,amount,type',
+      '2023-02-29,10.00,income',
+      '2024-02-29,20.00,income',
+      '2026-04-31,30.00,expense',
+    ].join('\n') + '\n'
+
+    const res = await importTx({ accountId: acct.id, csv })
+    expect(res.status).toBe(201)
+    expect(await res.json()).toMatchObject({ imported: 1, errors: [{ row: 2 }, { row: 4 }] })
+
+    const list = await (await get(`/transactions?accountId=${acct.id}`)).json() as any[]
+    expect(list.map((tx) => tx.date)).toEqual(['2024-02-29'])
+  })
+
   it('ignores a blank trailing line without treating it as an invalid row', async () => {
     const acct = await mkAccount()
     const csv = 'date,amount,type\n2026-07-01,10.00,income\n2026-07-02,20.00,expense\n\n'
@@ -377,6 +633,62 @@ describe('POST /transactions/import', () => {
     const list = await (await get(`/transactions?accountId=${acct.id}`)).json() as any[]
     expect(list).toHaveLength(1)
     expect(list[0]!.note).toBe('Groceries, weekly')
+  })
+
+  it('rejects an unterminated quoted field and imports nothing', async () => {
+    const acct = await mkAccount()
+    const csv = 'date,amount,type,note\n2026-07-01,10.00,expense,"unterminated note\n'
+
+    const res = await importTx({ accountId: acct.id, csv })
+
+    expect(res.status).toBe(400)
+    expect(await (await get(`/transactions?accountId=${acct.id}`)).json()).toEqual([])
+  })
+
+  it.each([
+    'date,amount,type,note\n2026-07-01,10.00,expense,bad"quote\n',
+    'date,amount,type,note\n2026-07-01,10.00,expense,"quoted"suffix\n',
+  ])('rejects invalid quote grammar and imports nothing', async (csv) => {
+    const acct = await mkAccount()
+
+    const res = await importTx({ accountId: acct.id, csv })
+
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'Invalid CSV quote grammar' })
+    expect(await (await get(`/transactions?accountId=${acct.id}`)).json()).toEqual([])
+  })
+
+  it('accepts an imported note at the 500-character limit', async () => {
+    const acct = await mkAccount()
+    const note = 'n'.repeat(500)
+
+    const res = await importTx({
+      accountId: acct.id,
+      csv: `date,amount,type,note\n2026-07-01,10.00,income,${note}\n`,
+    })
+
+    expect(res.status).toBe(201)
+    expect(await res.json()).toMatchObject({ imported: 1, errors: [] })
+    expect(await (await get(`/transactions?accountId=${acct.id}`)).json()).toEqual([
+      expect.objectContaining({ note }),
+    ])
+  })
+
+  it('reports and skips an imported note over 500 characters', async () => {
+    const acct = await mkAccount()
+    const note = 'n'.repeat(501)
+
+    const res = await importTx({
+      accountId: acct.id,
+      csv: `date,amount,type,note\n2026-07-01,10.00,income,${note}\n`,
+    })
+
+    expect(res.status).toBe(201)
+    expect(await res.json()).toMatchObject({
+      imported: 0,
+      errors: [expect.objectContaining({ row: 2 })],
+    })
+    expect(await (await get(`/transactions?accountId=${acct.id}`)).json()).toEqual([])
   })
 
   it('assigns a single shared importId to all transactions from one call, and a different one on a subsequent call', async () => {

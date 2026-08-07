@@ -1,17 +1,14 @@
 import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button, Field, Toast } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
 import { useToast } from '../../hooks/useToast'
-
-interface UserProfile {
-  id: string
-  email: string
-  name: string
-  currency: string
-}
+import { useUserProfile } from '../../hooks/useUserProfile'
 
 const CURRENCIES = ['RUB', 'USD', 'EUR', 'GBP', 'KZT', 'AMD', 'GEL']
+
+const DATE_FORMAT_LABELS: Record<string, string> = { dmy: 'ДД.ММ.ГГГГ', mdy: 'ММ/ДД/ГГГГ', ymd: 'ГГГГ-ММ-ДД' }
+const WEEK_START_LABELS: Record<string, string> = { monday: 'Понедельник', sunday: 'Воскресенье' }
 
 export function SettingsPage() {
   const qc = useQueryClient()
@@ -19,10 +16,7 @@ export function SettingsPage() {
   const [currency, setCurrency] = useState('RUB')
   const [saved, setSaved] = useState(false)
 
-  const { data: profile, isLoading } = useQuery<UserProfile>({
-    queryKey: ['userProfile'],
-    queryFn: () => api.get('/users/me'),
-  })
+  const { data: profile, isLoading } = useUserProfile()
 
   useEffect(() => {
     if (profile) setCurrency(profile.currency)
@@ -88,6 +82,18 @@ export function SettingsPage() {
           </form>
         )}
       </div>
+
+      {profile && (
+        <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
+          <div className="label">Формат даты и первый день недели</div>
+          <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+            {DATE_FORMAT_LABELS[profile.dateFormat ?? 'dmy']}, неделя с «{WEEK_START_LABELS[profile.weekStart ?? 'monday']}»
+          </p>
+          <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            Меняется в настройках аккаунта Schlüssel (доступны через значок профиля в шапке) — применяется сразу во всех сервисах платформы.
+          </p>
+        </div>
+      )}
 
       {toast.toast && (
         <Toast open variant={toast.toast.variant} message={toast.toast.message} onDismiss={toast.dismiss} />

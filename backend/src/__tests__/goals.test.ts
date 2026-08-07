@@ -126,6 +126,36 @@ describe('PUT /goals/:id', () => {
   it('returns 404 for unknown id', async () => {
     expect((await put('/goals/nope', { name: 'X' })).status).toBe(404)
   })
+
+  it('does not reset omitted defaulted fields during a partial update', async () => {
+    const g = await mkGoal({
+      icon: 'plane',
+      color: '#123456',
+      deadline: '2027-12-31',
+      recurring: true,
+      recurringDay: 17,
+    })
+
+    const res = await put(`/goals/${g.id}`, { name: 'Renamed Goal' })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({
+      name: 'Renamed Goal',
+      icon: 'plane',
+      color: '#123456',
+      deadline: '2027-12-31',
+      recurring: true,
+      recurringDay: 17,
+    })
+
+    const stored = (await (await get('/goals')).json() as any[]).find((goal) => goal.id === g.id)
+    expect(stored).toMatchObject({
+      icon: 'plane',
+      color: '#123456',
+      deadline: '2027-12-31',
+      recurring: true,
+      recurringDay: 17,
+    })
+  })
 })
 
 describe('DELETE /goals/:id', () => {

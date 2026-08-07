@@ -11,6 +11,7 @@ describe('openApiDocument', () => {
   it('is a valid OpenAPI 3.0 document with the expected metadata', () => {
     expect(openApiDocument.openapi).toBe('3.0.0')
     expect(openApiDocument.info.title).toBe('Kuvert API')
+    expect(openApiDocument.info.description).toContain('hosted Authorization Code + PKCE')
   })
 
   it('registers a bearer auth security scheme', () => {
@@ -30,9 +31,102 @@ describe('openApiDocument', () => {
       '/goals', '/goals/{id}', '/goals/{id}/contribute', '/goals/{id}/contributions',
       '/debts', '/debts/{id}',
       '/users/me',
+      '/export',
     ]) {
       expect(paths).toContain(path)
     }
+  })
+
+  it('documents SQL-before-pagination transaction filtering and transfer constraints', () => {
+    const list = openApiDocument.paths?.['/transactions']?.get
+    expect(list?.description).toContain('before limit/offset')
+    expect(list?.description).toContain('source or destination')
+    expect(list?.responses).toHaveProperty('400')
+
+    for (const operation of [
+      openApiDocument.paths?.['/transactions']?.post,
+      openApiDocument.paths?.['/transactions/{id}']?.put,
+    ]) {
+      expect(operation?.description).toContain('same currency')
+      expect(operation?.responses).toHaveProperty('400')
+      expect(operation?.responses).toHaveProperty('404')
+    }
+  })
+
+  it('documents strict partial CSV import and its result/error statuses', () => {
+    const operation = openApiDocument.paths?.['/transactions/import']?.post
+    expect(operation?.description).toContain('malformed quote grammar')
+    expect(operation?.description).toContain('Valid rows are imported')
+    expect(operation?.responses).toEqual(expect.objectContaining({
+      201: expect.any(Object),
+      400: expect.any(Object),
+      404: expect.any(Object),
+      413: expect.any(Object),
+    }))
+
+    const response = operation?.responses?.['201'] as any
+    expect(response?.content?.['application/json']?.schema).toMatchObject({
+      type: 'object',
+      required: expect.arrayContaining(['importId', 'imported', 'errors']),
+      properties: {
+        importId: expect.any(Object),
+        imported: expect.any(Object),
+        errors: expect.objectContaining({ type: 'array' }),
+      },
+    })
+  })
+
+  it('documents atomic opening balance and transfer-linked currency conflicts', () => {
+    const create = openApiDocument.paths?.['/accounts']?.post
+    expect(create?.description).toContain('atomically recorded')
+
+    const update = openApiDocument.paths?.['/accounts/{id}']?.put
+    expect(update?.description).toContain('initialBalance is creation-only')
+    expect(update?.responses).toHaveProperty('409')
+    const updateSchema = update?.requestBody as any
+    expect(JSON.stringify(updateSchema)).not.toContain('initialBalance')
+  })
+
+  it('publishes hosted profile date/week controls as read-only response fields', () => {
+    for (const method of ['get', 'put'] as const) {
+      const operation = openApiDocument.paths?.['/users/me']?.[method]
+      const response = operation?.responses?.['200'] as any
+      const schema = response?.content?.['application/json']?.schema
+      expect(schema).toMatchObject({
+        type: 'object',
+        required: expect.arrayContaining(['currency', 'weekStart', 'dateFormat', 'timezone']),
+        properties: expect.objectContaining({
+          currency: expect.any(Object),
+          weekStart: expect.any(Object),
+          dateFormat: expect.any(Object),
+          timezone: expect.any(Object),
+        }),
+      })
+      expect(operation?.description).toContain('Schlüssel')
+    }
+  })
+
+  it('documents the account-scoped export endpoint', () => {
+    expect(openApiDocument.paths?.['/export']?.get).toMatchObject({
+      security: [{ bearerAuth: [] }],
+    })
+  })
+
+  it('publishes a JSON response schema for the export payload', () => {
+    const response = openApiDocument.paths?.['/export']?.get?.responses?.['200'] as any
+    const schema = response?.content?.['application/json']?.schema
+    expect(schema).toMatchObject({
+      type: 'object',
+      properties: expect.objectContaining({
+        exportedAt: expect.any(Object),
+        scope: expect.any(Object),
+        currency: expect.any(Object),
+        accounts: expect.any(Object),
+        transactions: expect.any(Object),
+      }),
+    })
+    expect(schema.properties.scope).toMatchObject({ enum: ['kuvert-account-only'] })
+    expect(schema.properties.currency).toMatchObject({ minLength: 3, maxLength: 3 })
   })
 
   it('marks every documented operation as requiring bearer auth', () => {
@@ -79,9 +173,9 @@ const requireAuth = createMiddleware(async (c, next) => {
   }
   const token = auth.slice(7)
   if (token === 'admin-token') {
-    c.set('user', { id: 'admin-1', email: 'admin@example.com', name: 'Admin', role: 'admin' as const })
+    c.set('user', { id: 'admin-1', email: 'admin@example.com', name: 'Admin', role: 'admin' as const, weekStart: null, dateFormat: null, timezone: null })
   } else if (token === 'user-token') {
-    c.set('user', { id: 'user-1', email: 'user@example.com', name: 'User', role: 'user' as const })
+    c.set('user', { id: 'user-1', email: 'user@example.com', name: 'User', role: 'user' as const, weekStart: null, dateFormat: null, timezone: null })
   } else {
     return c.json({ error: 'Unauthorized' }, 401)
   }

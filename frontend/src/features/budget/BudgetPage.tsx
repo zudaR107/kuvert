@@ -6,9 +6,10 @@ import {
   handleArrowFieldNavigation, formatGroupedNumber, parseGroupedNumber,
 } from '@zudar107/schloss-ui'
 import { api } from '../../lib/api'
-import { formatAmount, formatMonthYear, fromMinorUnits, toMinorUnits, today } from '../../lib/format'
+import { formatAmount, formatDate, formatMonthYear, fromMinorUnits, toMinorUnits, today } from '../../lib/format'
 import { useToast } from '../../hooks/useToast'
 import { HeroIllustration } from '../../components/HeroIllustration'
+import { getDateFieldPreferences, useUserProfile, type DateFieldPreferences } from '../../hooks/useUserProfile'
 
 const PERIOD_FORM_ID = 'period-form'
 
@@ -41,6 +42,8 @@ function defaultPeriodForm(): PeriodFormValues {
 export function BudgetPage() {
   const qc = useQueryClient()
   const toast = useToast()
+  const { data: profile } = useUserProfile(false)
+  const dateFieldPreferences = getDateFieldPreferences(profile)
   const [periodIndex, setPeriodIndex] = useState(0)
   const [modalOpen, setModalOpen] = useState(false)
 
@@ -106,7 +109,11 @@ export function BudgetPage() {
         variant: 'primary',
       }]}
     >
-      <PeriodForm formId={PERIOD_FORM_ID} onSubmit={(v) => createPeriodMutation.mutate(v)} />
+      <PeriodForm
+        formId={PERIOD_FORM_ID}
+        dateFieldPreferences={dateFieldPreferences}
+        onSubmit={(v) => createPeriodMutation.mutate(v)}
+      />
     </Modal>
   )
 
@@ -151,7 +158,7 @@ export function BudgetPage() {
               {currentPeriod?.name ?? '—'}
             </h1>
             <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-              {currentPeriod ? `${currentPeriod.startDate} — ${currentPeriod.endDate}` : ''}
+              {currentPeriod ? `${formatDate(currentPeriod.startDate, profile)} — ${formatDate(currentPeriod.endDate, profile)}` : ''}
             </p>
           </div>
           <Button
@@ -250,8 +257,9 @@ export function BudgetPage() {
   )
 }
 
-function PeriodForm({ formId, onSubmit }: {
+function PeriodForm({ formId, dateFieldPreferences, onSubmit }: {
   formId: string
+  dateFieldPreferences: DateFieldPreferences
   onSubmit: (values: PeriodFormValues) => void
 }) {
   const [values, setValues] = useState<PeriodFormValues>(defaultPeriodForm)
@@ -280,6 +288,7 @@ function PeriodForm({ formId, onSubmit }: {
       />
 
       <DateRangeField
+        {...dateFieldPreferences}
         id="period-range"
         label="Период"
         start={values.startDate}

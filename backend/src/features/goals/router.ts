@@ -6,6 +6,7 @@ import { createId } from '@paralleldrive/cuid2'
 import { db } from '../../db/index.js'
 import { goals, goalContributions, accounts } from '../../db/schema.js'
 import { requireAuth } from '../../middleware/auth.js'
+import { isoDateSchema } from '../../utils/date.js'
 
 const router = new Hono()
 router.use('*', requireAuth)
@@ -15,15 +16,25 @@ export const goalSchema = z.object({
   icon: z.string().max(50).default('target'),
   color: z.string().regex(/^#[0-9a-f]{6}$/i).default('#10b981'),
   targetAmount: z.number().int().positive(),
-  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
+  deadline: isoDateSchema.nullable().default(null),
   recurring: z.boolean().default(false),
   recurringDay: z.number().int().min(1).max(28).nullable().default(null),
+})
+
+export const goalUpdateSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  icon: z.string().max(50).optional(),
+  color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
+  targetAmount: z.number().int().positive().optional(),
+  deadline: isoDateSchema.nullable().optional(),
+  recurring: z.boolean().optional(),
+  recurringDay: z.number().int().min(1).max(28).nullable().optional(),
 })
 
 export const contributionSchema = z.object({
   accountId: z.string(),
   amount: z.number().int().positive(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: isoDateSchema,
   note: z.string().max(500).nullable().default(null),
 })
 
@@ -111,7 +122,7 @@ router.post('/', zValidator('json', goalSchema), async (c) => {
   return c.json(goal, 201)
 })
 
-router.put('/:id', zValidator('json', goalSchema.partial()), async (c) => {
+router.put('/:id', zValidator('json', goalUpdateSchema), async (c) => {
   const user = c.get('user')
   const { id } = c.req.param()
   const data = c.req.valid('json')

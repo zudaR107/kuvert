@@ -68,7 +68,7 @@ export function AccountsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounts'] })
       // A non-zero initial balance also creates a real transaction
-      // server-side (see api/src/features/accounts/router.ts) - without
+      // server-side (see backend/src/features/accounts/router.ts) - without
       // this, an already-cached Transactions page (or the Budget page's
       // toBeBudgeted, which depends on income transactions) keeps
       // showing stale data until a hard reload.
@@ -89,7 +89,11 @@ export function AccountsPage() {
       closeModal()
       toast.showSuccess('Счёт обновлён')
     },
-    onError: () => toast.showError('Не удалось обновить счёт'),
+    onError: (error) => toast.showError(
+      (error as { status?: number }).status === 409
+        ? 'Нельзя изменить валюту счёта, связанного с переводом'
+        : 'Не удалось обновить счёт',
+    ),
   })
 
   const archiveMutation = useMutation({
@@ -237,7 +241,7 @@ function toPayload(values: AccountFormValues) {
 }
 
 // initialBalance only has a real, one-time effect at creation (it becomes
-// an opening transaction there - see api/src/features/accounts/router.ts).
+// an opening transaction there - see backend/src/features/accounts/router.ts).
 // PUT /accounts/:id never touches transactions, so sending it here would
 // silently rewrite a column nothing else reads without changing the
 // actual (transaction-derived) balance at all - omitted entirely instead
