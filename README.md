@@ -50,7 +50,10 @@ This repo is a pnpm workspace with two packages:
   `POST /transactions/import` in the API.
 - **Goals** — track progress toward a target, with an account recorded as context only;
   contributions do not change account balances or create transactions. Goals can be marked
-  recurring, regenerating a fresh cycle once the target is hit.
+  recurring, regenerating a fresh cycle once the target is hit. Completing a goal (via a
+  contribution or by lowering its target amount) fires a `kuvert.goal.completed.v1` event,
+  delivered to the platform's [`glocke`](https://github.com/zudaR107/glocke) notification
+  service through a transactional outbox.
 - **Debts** — track money owed to you or by you, independent of the budget itself.
 - **API documentation** — an admin-only OpenAPI spec (`GET /openapi.json`) and a Swagger
   UI viewer at `/docs` in the frontend app, generated from the API's own Zod schemas.
@@ -147,6 +150,9 @@ See `.env.example`. The important ones:
 | `KUVERT_ALLOWED_ORIGINS` | Kuvert-specific CORS allowlist used by Docker Compose |
 | `SCHLUSSEL_WEB_URL` / `VITE_SCHLUSSEL_URL` | Schlüssel hosted frontend URL for Compose / direct Vite use (not its internal API URL) |
 | `SCHLOSS_URL` / `VITE_SCHLOSS_URL` | Platform home URL for Compose / direct Vite use |
+| `GLOCKE_BASE_URL` | Glocke's internal API URL, for delivering notification events |
+| `KUVERT_TO_GLOCKE_HMAC_KEY_ID` | Key ID Kuvert signs outgoing Glocke requests with |
+| `KUVERT_TO_GLOCKE_HMAC_SECRET` | Matching HMAC secret; must equal Glocke's `GLOCKE_SOURCE_SECRET_KUVERT`. Left unset, goal-completion events still get recorded but queue up undelivered |
 
 The default Compose CORS allowlist includes Schlüssel's hosted browser origin. It is
 distinct from the internal `schlussel:4000` container URL. Platform ZIP collection calls
