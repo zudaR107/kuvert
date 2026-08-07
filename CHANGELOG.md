@@ -30,6 +30,8 @@ fit best; add a new section if none fits.
   token's date-format, week-start, and timezone claims. These preferences
   remain controlled by Schlüssel's hosted account page; Kuvert only owns
   its service-local currency preference.
+- Added exact Kuvert-scoped export delegation support on `GET /exports/me` only;
+  ordinary API routes and the retained `GET /export` still require access tokens.
 
 ## UI
 - Modal primitive; real Accounts, Debts, and Transactions pages (previously
@@ -184,6 +186,8 @@ fit best; add a new section if none fits.
   and ignores stale results after the import dialog is closed and reopened.
 - Account editing reports `409 Conflict` from the API with a specific
   explanation when a transfer-linked account's currency cannot change.
+- Added direct JSON data export to Settings using the shared Schloss UI export
+  action and download helper, without changing the existing currency settings.
 
 ## Budget logic
 - Lazy, cron-free envelope rollover between budget periods.
@@ -272,6 +276,12 @@ fit best; add a new section if none fits.
   (directories, Docker service names, the `/api` reverse-proxy path and
   the frontend HTTP client's base URL, CI job/image names) for platform-
   wide naming consistency.
+- Added the standardized version 1 Kuvert export envelope at `GET /exports/me`.
+  Its complete account snapshot includes archived records and every relation,
+  with all reads performed synchronously in one SQLite transaction. OpenAPI now
+  documents both this direct service protocol and the unchanged legacy
+  `GET /export` response; asynchronous all-services ZIP orchestration remains
+  owned by Schlüssel.
 
 ## Docs
 - README, AGPL-3.0 LICENSE, CONTRIBUTING.md.
