@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
 
 // ── Users (mirrored from Schlüssel via JWT) ───────────────────────
 // We store only the user id from the JWT — no passwords here.
@@ -130,6 +130,34 @@ export const debts = sqliteTable('debts', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 })
 
+// ── Notification outbox ─────────────────────────────────────────────
+// Transactional-outbox row for the shared generic dispatcher
+// (@zudar107/schloss-server-kit's createNotificationOutboxRuntime,
+// wired up in notifications/outbox.ts). Inserted in the SAME db
+// transaction as the domain change it reports (see goals/router.ts) -
+// never a separate write, so a failure to record the event rolls back
+// the domain change with it rather than silently losing the event.
+// Column names are this table's own storage shape, not the runtime's
+// NotificationOutboxRow shape - the glue in notifications/outbox.ts
+// maps between the two (e.g. event_type -> type, lease_id -> leaseToken).
+export const notificationOutbox = sqliteTable('notification_outbox', {
+  id: text('id').primaryKey(),
+  eventType: text('event_type').notNull(),
+  userId: text('user_id').notNull(),
+  payload: text('payload').notNull(),
+  correlationId: text('correlation_id').notNull(),
+  state: text('state').notNull().default('pending'),
+  createdAt: integer('created_at').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  nextAttemptAt: integer('next_attempt_at'),
+  leaseId: text('lease_id'),
+  leaseUntil: integer('lease_until'),
+  deliveredAt: integer('delivered_at'),
+  lastError: text('last_error'),
+}, (table) => [
+  index('notification_outbox_dispatch_idx').on(table.state, table.nextAttemptAt),
+])
+
 // ── Type exports ───────────────────────────────────────────────────
 export type User = typeof users.$inferSelect
 export type Account = typeof accounts.$inferSelect
@@ -141,3 +169,4 @@ export type Transaction = typeof transactions.$inferSelect
 export type Goal = typeof goals.$inferSelect
 export type GoalContribution = typeof goalContributions.$inferSelect
 export type Debt = typeof debts.$inferSelect
+export type NotificationOutboxRow = typeof notificationOutbox.$inferSelect

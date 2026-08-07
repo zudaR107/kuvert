@@ -43,7 +43,11 @@ export const db = drizzle(sqlite, { schema })
  * Order respects FK constraints: delete dependents before parents.
  */
 export function cleanDb() {
+  const hasNotificationOutbox = sqlite.prepare(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'notification_outbox'",
+  ).get() !== undefined
   const tables = [
+    ...(hasNotificationOutbox ? ['notification_outbox'] : []),
     'goal_contributions',
     'envelope_budgets',
     'transactions',
