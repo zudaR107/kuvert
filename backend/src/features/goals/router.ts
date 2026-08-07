@@ -3,10 +3,43 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { eq, and } from 'drizzle-orm'
 import { createId } from '@paralleldrive/cuid2'
+import { randomUUID } from 'node:crypto'
 import { db } from '../../db/index.js'
-import { goals, goalContributions, accounts } from '../../db/schema.js'
+import { goals, goalContributions, accounts, notificationOutbox } from '../../db/schema.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { isoDateSchema } from '../../utils/date.js'
+
+function isGoalComplete(currentAmount: number, targetAmount: number): boolean {
+  return currentAmount >= targetAmount
+}
+
+// Inserted in the same db.transaction() as the domain change that
+// completed the goal (see the contribute and update routes below) - if
+// this insert fails, the whole transaction (including the domain change
+// itself) rolls back with it, so the two can never drift out of sync.
+function insertGoalCompletionEvent(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  userId: string,
+  goalName: string,
+): void {
+  const id = randomUUID()
+  const now = Date.now()
+  tx.insert(notificationOutbox).values({
+    id,
+    eventType: 'kuvert.goal.completed.v1',
+    userId,
+    payload: JSON.stringify({ recipientId: userId, goalName }),
+    correlationId: id,
+    state: 'pending',
+    createdAt: now,
+    attempts: 0,
+    nextAttemptAt: now,
+    leaseId: null,
+    leaseUntil: null,
+    deliveredAt: null,
+    lastError: null,
+  }).run()
+}
 
 const router = new Hono()
 router.use('*', requireAuth)
@@ -129,7 +162,22 @@ router.put('/:id', zValidator('json', goalUpdateSchema), async (c) => {
   const existing = await db.select().from(goals)
     .where(and(eq(goals.id, id), eq(goals.userId, user.id))).get()
   if (!existing) return c.json({ error: 'Not found' }, 404)
-  await db.update(goals).set(data).where(eq(goals.id, id))
+
+  const newTargetAmount = data.targetAmount ?? existing.targetAmount
+  const wasComplete = isGoalComplete(existing.currentAmount, existing.targetAmount)
+  const nowComplete = isGoalComplete(existing.currentAmount, newTargetAmount)
+
+  try {
+    db.transaction((tx) => {
+      tx.update(goals).set(data).where(eq(goals.id, id)).run()
+      if (!existing.archived && !wasComplete && nowComplete) {
+        insertGoalCompletionEvent(tx, user.id, data.name ?? existing.name)
+      }
+    })
+  } catch {
+    return c.json({ error: 'Failed to update goal' }, 500)
+  }
+
   return c.json({ ...existing, ...data })
 })
 
@@ -163,10 +211,22 @@ router.post('/:id/contribute', zValidator('json', contributionSchema), async (c)
     ...data,
     createdAt: new Date(),
   }
-  await db.insert(goalContributions).values(contribution)
 
   const newAmount = Math.min(goal.currentAmount + data.amount, goal.targetAmount)
-  await db.update(goals).set({ currentAmount: newAmount }).where(eq(goals.id, goalId))
+  const wasComplete = isGoalComplete(goal.currentAmount, goal.targetAmount)
+  const nowComplete = isGoalComplete(newAmount, goal.targetAmount)
+
+  try {
+    db.transaction((tx) => {
+      tx.insert(goalContributions).values(contribution).run()
+      tx.update(goals).set({ currentAmount: newAmount }).where(eq(goals.id, goalId)).run()
+      if (!goal.archived && !wasComplete && nowComplete) {
+        insertGoalCompletionEvent(tx, user.id, goal.name)
+      }
+    })
+  } catch {
+    return c.json({ error: 'Failed to record contribution' }, 500)
+  }
 
   return c.json({ contribution, currentAmount: newAmount }, 201)
 })
