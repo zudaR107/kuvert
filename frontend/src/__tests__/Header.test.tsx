@@ -2,6 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, within, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { AuthUser } from '../hooks/useAuth'
+import { AuthContext } from '../hooks/useAuth'
+import { Layout } from '../components/Layout'
 
 // ---------------------------------------------------------------------------
 // Mock TanStack Router — same pattern as Layout.test.tsx / sidebarResize.test.tsx.
@@ -34,17 +36,7 @@ const mockUser: AuthUser = {
 // it's actually used, and to disambiguate it from the sidebar's own
 // (pre-existing, separate) identity block / settings link / logout button,
 // which live in an `<aside>`, not a `<header>`.
-//
-// The env var Header reads may be evaluated once at module scope rather than
-// per render, so each test resets the module registry and re-imports both
-// `Layout` and `AuthContext` together from that fresh registry — importing
-// `AuthContext` separately from a stale, previously-cached module instance
-// would give Layout/Header a context object different from the one the test
-// wraps it with, silently making the provided `user` invisible.
 async function renderLayout(user: AuthUser | null, logout: () => Promise<void> = vi.fn()) {
-  vi.resetModules()
-  const { Layout } = await import('../components/Layout')
-  const { AuthContext } = await import('../hooks/useAuth')
   const { container } = render(
     <AuthContext.Provider value={{ user, loading: false, logout, setUser: vi.fn() }}>
       <Layout>content</Layout>

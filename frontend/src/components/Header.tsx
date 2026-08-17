@@ -1,15 +1,23 @@
+import { useState } from 'react'
 import { Menu } from 'lucide-react'
-import { Header as SharedHeader, ThemeToggle } from '@zudar107/schloss-ui'
+import {
+  Header as SharedHeader,
+  normalizeNotificationOrigin,
+  ThemeToggle,
+  useUnreadNotifications,
+} from '@zudar107/schloss-ui'
 import { buildSchluesselAccountUrl } from '../lib/authRedirect'
 import type { AuthUser } from '../hooks/useAuth'
+import { apiClient } from '../lib/api'
 
 // Where "На главную" links back to (schloss) - separate from
 // VITE_SCHLUSSEL_URL, which points the other way (to the login page).
-const SCHLOSS_URL: string = (import.meta.env.VITE_SCHLOSS_URL as string | undefined) ?? 'http://localhost:3000'
+const DEFAULT_SCHLOSS_URL = 'http://localhost:3000'
+const DEFAULT_GLOCKE_URL = 'http://localhost:5177'
 
 interface HeaderProps {
   user: AuthUser | null
-  onLogout: () => void
+  onLogout: () => void | Promise<void>
   onOpenMobileMenu: () => void
 }
 
@@ -19,6 +27,21 @@ interface HeaderProps {
 // entirely below the mobile breakpoint. This sits alongside the sidebar's
 // own controls rather than replacing them.
 export function Header({ user, onLogout, onOpenMobileMenu }: HeaderProps) {
+  const [loggingOut, setLoggingOut] = useState(false)
+  const schlossUrl = (import.meta.env.VITE_SCHLOSS_URL as string | undefined) ?? DEFAULT_SCHLOSS_URL
+  const glockeUrl = (import.meta.env.VITE_GLOCKE_URL as string | undefined) ?? DEFAULT_GLOCKE_URL
+  const notificationOrigin = normalizeNotificationOrigin(glockeUrl)
+  const notificationState = useUnreadNotifications({
+    glockeOrigin: glockeUrl,
+    userId: loggingOut ? null : user?.id ?? null,
+    apiClient,
+  })
+
+  function handleLogout() {
+    setLoggingOut(true)
+    void Promise.resolve(onLogout()).catch(() => setLoggingOut(false))
+  }
+
   return (
     <SharedHeader
       // The home link leads to schloss (kuvert has no home page of its
@@ -31,7 +54,7 @@ export function Header({ user, onLogout, onOpenMobileMenu }: HeaderProps) {
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
       }
-      homeHref={SCHLOSS_URL}
+      homeHref={schlossUrl}
       homeTitle="На главную"
       user={user}
       // The header's gear icon opens the platform-wide account settings
@@ -39,7 +62,10 @@ export function Header({ user, onLogout, onOpenMobileMenu }: HeaderProps) {
       // kuvert's own /settings route, which is service-specific
       // preferences (currency) and stays reachable from the sidebar.
       onSettings={() => { window.location.href = buildSchluesselAccountUrl(window.location.pathname) }}
-      onLogout={onLogout}
+      onLogout={handleLogout}
+      notifications={user && !loggingOut && notificationOrigin
+        ? { href: `${notificationOrigin}/notifications`, state: notificationState }
+        : undefined}
       rightSlot={<ThemeToggle />}
       leftSlot={
         <button
