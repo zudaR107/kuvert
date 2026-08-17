@@ -42,6 +42,12 @@ const SECTIONS: Section[] = [
     screenshotSlug: 'settings',
     screenshotAlt: 'Страница настроек с выбором валюты и экспортом данных',
   },
+  {
+    titel: 'Уведомления',
+    text: 'Колокольчик в верхней панели открывает Glocke. Значок показывает число непрочитанных уведомлений, а если Glocke временно недоступен, переход к списку уведомлений всё равно остаётся доступен.',
+    screenshotSlug: 'notifications',
+    screenshotAlt: 'Колокольчик уведомлений в верхней панели',
+  },
 ]
 
 export function HelpPage() {

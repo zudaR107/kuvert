@@ -63,6 +63,8 @@ This repo is a pnpm workspace with two packages:
 - **Platform profile preferences** — displayed dates and calendar week starts follow
   the verified Schlüssel profile. They are shown in Kuvert settings but changed on
   Schlüssel's hosted account page.
+- **Notification center** — the authenticated header links to Glocke and shows its
+  unread count using Kuvert's existing in-memory access token.
 
 ### Transaction constraints
 
@@ -150,6 +152,7 @@ See `.env.example`. The important ones:
 | `KUVERT_ALLOWED_ORIGINS` | Kuvert-specific CORS allowlist used by Docker Compose |
 | `SCHLUSSEL_WEB_URL` / `VITE_SCHLUSSEL_URL` | Schlüssel hosted frontend URL for Compose / direct Vite use (not its internal API URL) |
 | `SCHLOSS_URL` / `VITE_SCHLOSS_URL` | Platform home URL for Compose / direct Vite use |
+| `GLOCKE_URL` / `VITE_GLOCKE_URL` | Browser-facing Glocke origin for Compose / direct Vite use; used by the header bell and unread-count request |
 | `GLOCKE_BASE_URL` | Glocke's internal API URL, for delivering notification events |
 | `KUVERT_TO_GLOCKE_HMAC_KEY_ID` | Key ID Kuvert signs outgoing Glocke requests with |
 | `KUVERT_TO_GLOCKE_HMAC_SECRET` | Matching HMAC secret; must equal Glocke's `GLOCKE_SOURCE_SECRET_KUVERT`. Omit both HMAC variables to queue events without delivery; partial credentials fail startup |

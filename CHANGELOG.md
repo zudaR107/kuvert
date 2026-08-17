@@ -34,6 +34,9 @@ fit best; add a new section if none fits.
   ordinary API routes and the retained `GET /export` still require access tokens.
 
 ## UI
+- The authenticated shared header now links its notification bell to Glocke
+  and displays Glocke's unread count using the existing in-memory access token.
+  The browser-facing Glocke origin is configured at frontend build time.
 - Modal primitive; real Accounts, Debts, and Transactions pages (previously
   "in development" placeholders).
 - Wired up the create/contribute buttons on the Budget and Goals pages.
