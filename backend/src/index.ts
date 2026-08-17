@@ -67,12 +67,18 @@ const server = serve({ fetch: app.fetch, port: PORT }, () => {
 
 const notificationOutboxRuntime = startNotificationOutbox()
 
-let shutdownStarted = false
-async function shutdown() {
-  if (shutdownStarted) return
-  shutdownStarted = true
-  server.close()
-  await notificationOutboxRuntime.stop()
+let shutdownPromise: Promise<void> | undefined
+export function shutdown(): Promise<void> {
+  if (shutdownPromise) return shutdownPromise
+
+  const serverClosed = new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) reject(error)
+      else resolve()
+    })
+  })
+  shutdownPromise = Promise.all([serverClosed, notificationOutboxRuntime.stop()]).then(() => undefined)
+  return shutdownPromise
 }
 process.once('SIGINT', () => { void shutdown() })
 process.once('SIGTERM', () => { void shutdown() })

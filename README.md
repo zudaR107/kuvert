@@ -152,7 +152,8 @@ See `.env.example`. The important ones:
 | `SCHLOSS_URL` / `VITE_SCHLOSS_URL` | Platform home URL for Compose / direct Vite use |
 | `GLOCKE_BASE_URL` | Glocke's internal API URL, for delivering notification events |
 | `KUVERT_TO_GLOCKE_HMAC_KEY_ID` | Key ID Kuvert signs outgoing Glocke requests with |
-| `KUVERT_TO_GLOCKE_HMAC_SECRET` | Matching HMAC secret; must equal Glocke's `GLOCKE_SOURCE_SECRET_KUVERT`. Left unset, goal-completion events still get recorded but queue up undelivered |
+| `KUVERT_TO_GLOCKE_HMAC_SECRET` | Matching HMAC secret; must equal Glocke's `GLOCKE_SOURCE_SECRET_KUVERT`. Omit both HMAC variables to queue events without delivery; partial credentials fail startup |
+| `GLOCKE_OUTBOX_RETENTION_MS` | How long delivered and permanently failed notification rows are retained (default 2,147,483,647 ms, about 24.9 days); must be a positive timer-safe integer. Periodic cleanup runs even when delivery is disabled, while pending and in-flight rows are never removed |
 
 The default Compose CORS allowlist includes Schlüssel's hosted browser origin. It is
 distinct from the internal `schlussel:4000` container URL. Platform ZIP collection calls

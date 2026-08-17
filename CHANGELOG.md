@@ -224,6 +224,9 @@ fit best; add a new section if none fits.
   `kuvert-account-only`.
 
 ## Infrastructure
+- Hardened goal-completion delivery by serializing completion transitions with
+  goal mutations, validating producer startup configuration, bounding terminal
+  outbox retention, and awaiting both HTTP and dispatcher shutdown.
 - CI (tests + lint) on every push/PR.
 - Docker Compose networking on a shared `schloss-net`.
 - Migrated from nginx to Caddy in the web image.

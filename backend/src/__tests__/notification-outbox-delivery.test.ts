@@ -18,27 +18,42 @@ interface OutboxRow {
   lease_id: string | null
   lease_until: number | null
   delivered_at: number | null
+  permanent_at: number | null
   last_error: string | null
 }
 
 const KEY_ID_VAR = 'KUVERT_TO_GLOCKE_HMAC_KEY_ID'
 const SECRET_VAR = 'KUVERT_TO_GLOCKE_HMAC_SECRET'
+const CONFIG_VARS = [
+  KEY_ID_VAR,
+  SECRET_VAR,
+  'GLOCKE_BASE_URL',
+  'GLOCKE_OUTBOX_LEASE_MS',
+  'GLOCKE_FETCH_TIMEOUT_MS',
+  'GLOCKE_DISPATCH_INTERVAL_MS',
+  'GLOCKE_WORKER_STOP_TIMEOUT_MS',
+  'GLOCKE_MAX_ATTEMPTS',
+  'GLOCKE_RETRY_BASE_DELAY_MS',
+  'GLOCKE_RETRY_MAX_DELAY_MS',
+  'GLOCKE_OUTBOX_RETENTION_MS',
+] as const
 
-let savedKeyId: string | undefined
-let savedSecret: string | undefined
+let savedConfig: Record<string, string | undefined>
 
 beforeEach(() => {
   cleanDb()
-  savedKeyId = process.env[KEY_ID_VAR]
-  savedSecret = process.env[SECRET_VAR]
+  savedConfig = Object.fromEntries(CONFIG_VARS.map((name) => [name, process.env[name]]))
+  for (const name of CONFIG_VARS) delete process.env[name]
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
-  if (savedKeyId === undefined) delete process.env[KEY_ID_VAR]
-  else process.env[KEY_ID_VAR] = savedKeyId
-  if (savedSecret === undefined) delete process.env[SECRET_VAR]
-  else process.env[SECRET_VAR] = savedSecret
+  for (const name of CONFIG_VARS) {
+    const value = savedConfig[name]
+    if (value === undefined) delete process.env[name]
+    else process.env[name] = value
+  }
 })
 
 function configureCredentials() {
@@ -69,14 +84,15 @@ function seedRow(overrides: Partial<OutboxRow> = {}): OutboxRow {
     lease_id: null,
     lease_until: null,
     delivered_at: null,
+    permanent_at: null,
     last_error: null,
     ...overrides,
   }
   sqlite.prepare(`
     INSERT INTO notification_outbox
-      (id, event_type, user_id, payload, correlation_id, state, created_at, attempts, next_attempt_at, lease_id, lease_until, delivered_at, last_error)
+      (id, event_type, user_id, payload, correlation_id, state, created_at, attempts, next_attempt_at, lease_id, lease_until, delivered_at, permanent_at, last_error)
     VALUES
-      (@id, @event_type, @user_id, @payload, @correlation_id, @state, @created_at, @attempts, @next_attempt_at, @lease_id, @lease_until, @delivered_at, @last_error)
+      (@id, @event_type, @user_id, @payload, @correlation_id, @state, @created_at, @attempts, @next_attempt_at, @lease_id, @lease_until, @delivered_at, @permanent_at, @last_error)
   `).run(row)
   return row
 }
@@ -156,11 +172,94 @@ describe('startNotificationOutbox', () => {
       expect(failed.state).not.toBe('pending')
       expect(failed.state).not.toBe('inflight')
       expect(failed.attempts).toBeGreaterThanOrEqual(1)
+      expect(failed.permanent_at).toBeGreaterThanOrEqual(row.created_at)
       expect(failed.last_error).not.toBeNull()
       expect(typeof failed.last_error).toBe('string')
       expect(fetchMock).toHaveBeenCalled()
     } finally {
       await runtime.stop()
     }
+  })
+
+  it('removes only delivered and permanent rows older than retention', async () => {
+    configureCredentials()
+    process.env['GLOCKE_OUTBOX_RETENTION_MS'] = String(60 * 60_000)
+    const now = Date.now()
+    const old = now - 2 * 60 * 60_000
+    const fresh = now - 30 * 60_000
+    const oldDelivered = seedRow({ state: 'delivered', created_at: old, delivered_at: old, next_attempt_at: null })
+    const oldPermanent = seedRow({ state: 'permanent', created_at: old, permanent_at: old, next_attempt_at: null })
+    const freshDelivered = seedRow({ state: 'delivered', created_at: old, delivered_at: fresh, next_attempt_at: null })
+    const freshPermanent = seedRow({ state: 'permanent', created_at: old, permanent_at: fresh, next_attempt_at: null })
+    const pending = seedRow({ state: 'pending', created_at: old, next_attempt_at: now + 60_000 })
+    const inflight = seedRow({ state: 'inflight', created_at: old, lease_id: 'active', lease_until: now + 60_000 })
+    vi.stubGlobal('fetch', vi.fn())
+
+    const runtime = startNotificationOutbox() as unknown as { stop: () => Promise<void> }
+    try {
+      const retainedIds = (sqlite.prepare('SELECT id FROM notification_outbox').all() as Array<{ id: string }>)
+        .map(({ id }) => id)
+      expect(retainedIds).not.toContain(oldDelivered.id)
+      expect(retainedIds).not.toContain(oldPermanent.id)
+      expect(retainedIds).toEqual(expect.arrayContaining([
+        freshDelivered.id,
+        freshPermanent.id,
+        pending.id,
+        inflight.id,
+      ]))
+    } finally {
+      await runtime.stop()
+    }
+  })
+
+  it.each(['0', '-1', '1.5', '2147483648', '9007199254740992', 'NaN'])(
+    'rejects an invalid outbox retention duration: %s',
+    async (retentionMs) => {
+      process.env['GLOCKE_OUTBOX_RETENTION_MS'] = retentionMs
+      expect(() => startNotificationOutbox()).toThrow(/GLOCKE_OUTBOX_RETENTION_MS/)
+    },
+  )
+
+  it.each(['enabled', 'disabled'] as const)('continues retention cleanup periodically when delivery is %s', async (mode) => {
+    vi.useFakeTimers()
+    process.env['GLOCKE_OUTBOX_RETENTION_MS'] = '1000'
+    if (mode === 'enabled') configureCredentials()
+    else clearCredentials()
+    vi.stubGlobal('fetch', vi.fn())
+
+    const runtime = startNotificationOutbox()
+    const row = seedRow({
+      state: 'delivered',
+      created_at: Date.now(),
+      delivered_at: Date.now(),
+      next_attempt_at: null,
+    })
+    try {
+      expect(getRow(row.id)).toBeDefined()
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(sqlite.prepare('SELECT id FROM notification_outbox WHERE id = ?').get(row.id)).toBeUndefined()
+    } finally {
+      await runtime.stop()
+    }
+  })
+
+  it.each(['enabled', 'disabled'] as const)('stops periodic retention cleanup when the %s runtime is stopped', async (mode) => {
+    vi.useFakeTimers()
+    if (mode === 'enabled') configureCredentials()
+    else clearCredentials()
+    process.env['GLOCKE_OUTBOX_RETENTION_MS'] = '1000'
+    vi.stubGlobal('fetch', vi.fn())
+    const runtime = startNotificationOutbox()
+    await runtime.stop()
+
+    const row = seedRow({
+      state: 'delivered',
+      created_at: Date.now(),
+      delivered_at: Date.now(),
+      next_attempt_at: null,
+    })
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    expect(getRow(row.id)).toBeDefined()
   })
 })

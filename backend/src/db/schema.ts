@@ -153,6 +153,7 @@ export const notificationOutbox = sqliteTable('notification_outbox', {
   leaseId: text('lease_id'),
   leaseUntil: integer('lease_until'),
   deliveredAt: integer('delivered_at'),
+  permanentAt: integer('permanent_at'),
   lastError: text('last_error'),
 }, (table) => [
   index('notification_outbox_dispatch_idx').on(table.state, table.nextAttemptAt),

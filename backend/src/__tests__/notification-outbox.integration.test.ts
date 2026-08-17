@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import Database from 'better-sqlite3'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 vi.mock('../db/index.js', async () => await import('./helpers/db.js'))
 vi.mock('../middleware/auth.js', async () => await import('./helpers/auth-mock.js'))
@@ -7,6 +11,7 @@ import { cleanDb, sqlite } from './helpers/db.js'
 import { createTestApp } from './helpers/setup.js'
 
 const app = createTestApp()
+const migrationsDir = resolve(dirname(fileURLToPath(import.meta.url)), '../db/migrations')
 const AUTH_HEADERS = { Authorization: 'Bearer test-token' }
 const JSON_HEADERS = { ...AUTH_HEADERS, 'Content-Type': 'application/json' }
 
@@ -23,6 +28,7 @@ interface OutboxRow {
   lease_id: string | null
   lease_until: number | null
   delivered_at: number | null
+  permanent_at: number | null
   last_error: string | null
 }
 
@@ -118,6 +124,7 @@ describe('notification_outbox migration', () => {
       'lease_until',
       'delivered_at',
       'last_error',
+      'permanent_at',
     ])
     expect(columns.find((column) => column.name === 'id')).toMatchObject({ notnull: 1, pk: 1 })
     expect(columns.find((column) => column.name === 'state')?.dflt_value).toMatch(/pending/)
@@ -125,6 +132,32 @@ describe('notification_outbox migration', () => {
 
     const indexes = sqlite.prepare('PRAGMA index_list(notification_outbox)').all() as Array<{ name: string }>
     expect(indexes.map((index) => index.name)).toContain('notification_outbox_dispatch_idx')
+  })
+
+  it('backfills terminal time for permanent rows created before permanent_at existed', () => {
+    const legacyDb = new Database(':memory:')
+    const runMigration = (name: string) => {
+      for (const statement of readFileSync(resolve(migrationsDir, name), 'utf8').split('--> statement-breakpoint')) {
+        if (statement.trim()) legacyDb.exec(statement)
+      }
+    }
+
+    try {
+      runMigration('0002_shocking_fenris.sql')
+      legacyDb.prepare(`
+        INSERT INTO notification_outbox
+          (id, event_type, user_id, payload, correlation_id, state, created_at)
+        VALUES (?, ?, ?, ?, ?, 'permanent', ?)
+      `).run(crypto.randomUUID(), 'kuvert.test.v1', 'user-1', '{}', crypto.randomUUID(), 123_456)
+
+      runMigration('0003_careful_paper_doll.sql')
+
+      expect(legacyDb.prepare(
+        "SELECT created_at, permanent_at FROM notification_outbox WHERE state = 'permanent'",
+      ).get()).toEqual({ created_at: 123_456, permanent_at: 123_456 })
+    } finally {
+      legacyDb.close()
+    }
   })
 })
 
@@ -187,6 +220,29 @@ describe('goal completion notification outbox', () => {
     expect(outboxRows()).toHaveLength(1)
   })
 
+  it('serializes interleaved contributions without losing amount or duplicating completion', async () => {
+    const goal = await createGoal()
+    const account = await createAccount()
+
+    const responses = await Promise.all([
+      post(`/goals/${goal.id}/contribute`, {
+        accountId: account.id,
+        amount: 600,
+        date: '2026-08-06',
+      }),
+      post(`/goals/${goal.id}/contribute`, {
+        accountId: account.id,
+        amount: 600,
+        date: '2026-08-07',
+      }),
+    ])
+
+    expect(responses.map((response) => response.status)).toEqual([201, 201])
+    expect(goalState(goal.id)).toEqual({ current_amount: 1_000, target_amount: 1_000 })
+    expect(contributionCount(goal.id)).toBe(2)
+    expect(outboxRows()).toHaveLength(1)
+  })
+
   it('records one event when lowering targetAmount completes an active goal', async () => {
     const goal = await createGoal('House Deposit')
     const account = await createAccount()
@@ -211,6 +267,25 @@ describe('goal completion notification outbox', () => {
       recipientId: 'user-1',
       goalName: 'House Deposit',
     })
+  })
+
+  it('serializes interleaved target adjustments against the latest goal state', async () => {
+    const goal = await createGoal()
+    const account = await createAccount()
+    await post(`/goals/${goal.id}/contribute`, {
+      accountId: account.id,
+      amount: 700,
+      date: '2026-08-07',
+    })
+
+    const responses = await Promise.all([
+      put(`/goals/${goal.id}`, { targetAmount: 700 }),
+      put(`/goals/${goal.id}`, { targetAmount: 600 }),
+    ])
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200])
+    expect([600, 700]).toContain(goalState(goal.id).target_amount)
+    expect(outboxRows()).toHaveLength(1)
   })
 
   it('emits nothing for incomplete updates, no-op updates, archived goals, or already-complete goals', async () => {
