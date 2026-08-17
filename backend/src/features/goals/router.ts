@@ -159,26 +159,29 @@ router.put('/:id', zValidator('json', goalUpdateSchema), async (c) => {
   const user = c.get('user')
   const { id } = c.req.param()
   const data = c.req.valid('json')
-  const existing = await db.select().from(goals)
-    .where(and(eq(goals.id, id), eq(goals.userId, user.id))).get()
-  if (!existing) return c.json({ error: 'Not found' }, 404)
-
-  const newTargetAmount = data.targetAmount ?? existing.targetAmount
-  const wasComplete = isGoalComplete(existing.currentAmount, existing.targetAmount)
-  const nowComplete = isGoalComplete(existing.currentAmount, newTargetAmount)
 
   try {
-    db.transaction((tx) => {
+    const updated = db.transaction((tx) => {
+      const existing = tx.select().from(goals)
+        .where(and(eq(goals.id, id), eq(goals.userId, user.id))).get()
+      if (!existing) return null
+
+      const newTargetAmount = data.targetAmount ?? existing.targetAmount
+      const wasComplete = isGoalComplete(existing.currentAmount, existing.targetAmount)
+      const nowComplete = isGoalComplete(existing.currentAmount, newTargetAmount)
+
       tx.update(goals).set(data).where(eq(goals.id, id)).run()
       if (!existing.archived && !wasComplete && nowComplete) {
         insertGoalCompletionEvent(tx, user.id, data.name ?? existing.name)
       }
+      return { ...existing, ...data }
     })
+
+    if (!updated) return c.json({ error: 'Not found' }, 404)
+    return c.json(updated)
   } catch {
     return c.json({ error: 'Failed to update goal' }, 500)
   }
-
-  return c.json({ ...existing, ...data })
 })
 
 router.delete('/:id', async (c) => {
@@ -197,14 +200,6 @@ router.post('/:id/contribute', zValidator('json', contributionSchema), async (c)
   const { id: goalId } = c.req.param()
   const data = c.req.valid('json')
 
-  const goal = await db.select().from(goals)
-    .where(and(eq(goals.id, goalId), eq(goals.userId, user.id))).get()
-  if (!goal) return c.json({ error: 'Not found' }, 404)
-
-  const account = await db.select().from(accounts)
-    .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id))).get()
-  if (!account) return c.json({ error: 'Account not found' }, 404)
-
   const contribution = {
     id: createId(),
     goalId,
@@ -212,23 +207,37 @@ router.post('/:id/contribute', zValidator('json', contributionSchema), async (c)
     createdAt: new Date(),
   }
 
-  const newAmount = Math.min(goal.currentAmount + data.amount, goal.targetAmount)
-  const wasComplete = isGoalComplete(goal.currentAmount, goal.targetAmount)
-  const nowComplete = isGoalComplete(newAmount, goal.targetAmount)
-
   try {
-    db.transaction((tx) => {
+    const result = db.transaction((tx) => {
+      const goal = tx.select().from(goals)
+        .where(and(eq(goals.id, goalId), eq(goals.userId, user.id))).get()
+      if (!goal) return { error: 'goal' } as const
+
+      const account = tx.select().from(accounts)
+        .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id))).get()
+      if (!account) return { error: 'account' } as const
+
+      const newAmount = Math.min(goal.currentAmount + data.amount, goal.targetAmount)
+      const wasComplete = isGoalComplete(goal.currentAmount, goal.targetAmount)
+      const nowComplete = isGoalComplete(newAmount, goal.targetAmount)
+
       tx.insert(goalContributions).values(contribution).run()
       tx.update(goals).set({ currentAmount: newAmount }).where(eq(goals.id, goalId)).run()
       if (!goal.archived && !wasComplete && nowComplete) {
         insertGoalCompletionEvent(tx, user.id, goal.name)
       }
+      return { contribution, currentAmount: newAmount }
     })
+
+    if ('error' in result) {
+      return result.error === 'goal'
+        ? c.json({ error: 'Not found' }, 404)
+        : c.json({ error: 'Account not found' }, 404)
+    }
+    return c.json(result, 201)
   } catch {
     return c.json({ error: 'Failed to record contribution' }, 500)
   }
-
-  return c.json({ contribution, currentAmount: newAmount }, 201)
 })
 
 router.get('/:id/contributions', async (c) => {
