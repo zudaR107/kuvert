@@ -60,6 +60,39 @@ async function createAccount() {
   return await response.json() as { id: string }
 }
 
+async function createDebt(counterparty = 'Friend', type: 'owed' | 'owing' = 'owed', amount = 500) {
+  const response = await post('/debts', { counterparty, type, amount })
+  expect(response.status).toBe(201)
+  return await response.json() as { id: string; counterparty: string; settled: boolean }
+}
+
+function debtState(debtId: string): { settled: number; counterparty: string } {
+  return sqlite.prepare(
+    'SELECT settled, counterparty FROM debts WHERE id = ?',
+  ).get(debtId) as { settled: number; counterparty: string }
+}
+
+async function createEnvelope(name = 'Groceries') {
+  const response = await post('/envelopes', { name })
+  expect(response.status).toBe(201)
+  return await response.json() as { id: string; name: string }
+}
+
+async function createPeriod(name: string, startDate: string, endDate: string) {
+  const response = await post('/periods', { name, startDate, endDate })
+  expect(response.status).toBe(201)
+  return await response.json() as { id: string }
+}
+
+async function setAllocation(periodId: string, envelopeId: string, allocated: number) {
+  const response = await put(`/periods/${periodId}/budget/${envelopeId}`, { allocated })
+  expect(response.status).toBeLessThan(300)
+}
+
+function expense(accountId: string, envelopeId: string | null, amount: number, date: string) {
+  return post('/transactions', { accountId, envelopeId, type: 'expense', amount, date })
+}
+
 function hasOutboxTable(): boolean {
   return sqlite.prepare(
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'notification_outbox'",
@@ -388,5 +421,201 @@ describe('goal completion notification outbox', () => {
     expect(goalState(goal.id)).toEqual({ current_amount: 700, target_amount: 1_000 })
     expect(contributionCount(goal.id)).toBe(1)
     expect(outboxRows()).toHaveLength(0)
+  })
+})
+
+describe('debt settlement notification outbox', () => {
+  it('records exactly one strict versioned event when a debt is marked settled', async () => {
+    const debt = await createDebt('Alex')
+
+    const response = await put(`/debts/${debt.id}`, { settled: true })
+
+    expect(response.status).toBe(200)
+    const rows = outboxRows()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      event_type: 'kuvert.debt.paid_off.v1',
+      user_id: 'user-1',
+      state: 'pending',
+      attempts: 0,
+      lease_id: null,
+      lease_until: null,
+      delivered_at: null,
+      last_error: null,
+    })
+    expect(JSON.parse(rows[0]!.payload)).toEqual({
+      recipientId: 'user-1',
+      counterparty: 'Alex',
+    })
+    expect(rows[0]!.correlation_id).toBe(rows[0]!.id)
+  })
+
+  it('uses the counterparty name from the same update when both change together', async () => {
+    const debt = await createDebt('Old Name')
+
+    const response = await put(`/debts/${debt.id}`, { settled: true, counterparty: 'New Name' })
+
+    expect(response.status).toBe(200)
+    const rows = outboxRows()
+    expect(rows).toHaveLength(1)
+    expect(JSON.parse(rows[0]!.payload)).toMatchObject({ counterparty: 'New Name' })
+  })
+
+  it('emits nothing for creation, unrelated field updates, no-op settled updates, or re-settling', async () => {
+    const debt = await createDebt()
+    expect(outboxRows()).toHaveLength(0)
+
+    await put(`/debts/${debt.id}`, { amount: 900 })
+    await put(`/debts/${debt.id}`, { settled: false })
+    expect(outboxRows()).toHaveLength(0)
+
+    await put(`/debts/${debt.id}`, { settled: true })
+    expect(outboxRows()).toHaveLength(1)
+
+    await put(`/debts/${debt.id}`, { settled: true })
+    await put(`/debts/${debt.id}`, { note: 'paid in cash' })
+    expect(outboxRows()).toHaveLength(1)
+  })
+
+  it('re-arms after a debt is reopened and settled again', async () => {
+    const debt = await createDebt()
+    await put(`/debts/${debt.id}`, { settled: true })
+    expect(outboxRows()).toHaveLength(1)
+
+    await put(`/debts/${debt.id}`, { settled: false })
+    await put(`/debts/${debt.id}`, { settled: true })
+
+    expect(outboxRows()).toHaveLength(2)
+  })
+
+  it('rolls back the settled flag when its completion outbox insert fails', async () => {
+    const debt = await createDebt()
+    const exists = hasOutboxTable()
+    expect(exists, 'migration must create notification_outbox').toBe(true)
+    if (!exists) return
+    sqlite.exec(`
+      CREATE TRIGGER fail_notification_outbox_insert
+      BEFORE INSERT ON notification_outbox
+      BEGIN
+        SELECT RAISE(ABORT, 'forced outbox failure');
+      END
+    `)
+
+    const response = await put(`/debts/${debt.id}`, { settled: true })
+
+    expect(response.status).toBeGreaterThanOrEqual(500)
+    expect(response.status).toBeLessThan(600)
+    expect(debtState(debt.id)).toEqual({ settled: 0, counterparty: debt.counterparty })
+    expect(outboxRows()).toHaveLength(0)
+  })
+})
+
+describe('envelope overdrawn notification outbox', () => {
+  it('fires exactly once on the expense that crosses available from >=0 to <0', async () => {
+    const account = await createAccount()
+    const envelope = await createEnvelope('Groceries')
+    const period = await createPeriod('August', '2026-08-01', '2026-08-31')
+    await setAllocation(period.id, envelope.id, 1_000)
+
+    const first = await expense(account.id, envelope.id, 400, '2026-08-05')
+    expect(first.status).toBe(201)
+    expect(outboxRows()).toHaveLength(0)
+
+    const second = await expense(account.id, envelope.id, 700, '2026-08-06')
+    expect(second.status).toBe(201)
+    const rows = outboxRows()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ event_type: 'kuvert.envelope.overdrawn.v1', user_id: 'user-1', state: 'pending' })
+    expect(JSON.parse(rows[0]!.payload)).toEqual({ recipientId: 'user-1', envelopeName: 'Groceries' })
+  })
+
+  it('does not refire on further expenses while already overdrawn', async () => {
+    const account = await createAccount()
+    const envelope = await createEnvelope()
+    const period = await createPeriod('August', '2026-08-01', '2026-08-31')
+    await setAllocation(period.id, envelope.id, 100)
+
+    await expense(account.id, envelope.id, 200, '2026-08-05')
+    expect(outboxRows()).toHaveLength(1)
+
+    await expense(account.id, envelope.id, 50, '2026-08-06')
+    expect(outboxRows()).toHaveLength(1)
+  })
+
+  it('re-arms after recovering back to >=0 and going negative again', async () => {
+    const account = await createAccount()
+    const envelope = await createEnvelope()
+    const period = await createPeriod('August', '2026-08-01', '2026-08-31')
+    await setAllocation(period.id, envelope.id, 100)
+
+    await expense(account.id, envelope.id, 200, '2026-08-05')
+    expect(outboxRows()).toHaveLength(1)
+
+    await setAllocation(period.id, envelope.id, 500)
+    await expense(account.id, envelope.id, 250, '2026-08-06')
+    expect(outboxRows()).toHaveLength(1)
+
+    await expense(account.id, envelope.id, 100, '2026-08-07')
+    expect(outboxRows()).toHaveLength(2)
+  })
+
+  it('fires when editing an existing expense amount pushes it negative', async () => {
+    const account = await createAccount()
+    const envelope = await createEnvelope()
+    const period = await createPeriod('August', '2026-08-01', '2026-08-31')
+    await setAllocation(period.id, envelope.id, 500)
+
+    const created = await expense(account.id, envelope.id, 300, '2026-08-05')
+    const tx = await created.json() as { id: string }
+    expect(outboxRows()).toHaveLength(0)
+
+    const edited = await put(`/transactions/${tx.id}`, { amount: 600 })
+    expect(edited.status).toBe(200)
+    expect(outboxRows()).toHaveLength(1)
+  })
+
+  it('emits nothing for income, envelope-less expenses, or expenses outside any period', async () => {
+    const account = await createAccount()
+    const envelope = await createEnvelope()
+    await createPeriod('August', '2026-08-01', '2026-08-31')
+
+    await post('/transactions', { accountId: account.id, type: 'income', amount: 10_000, date: '2026-08-05' })
+    await expense(account.id, null, 10_000, '2026-08-05')
+    await expense(account.id, envelope.id, 10_000, '2099-01-01')
+
+    expect(outboxRows()).toHaveLength(0)
+  })
+
+  it('never fires for bulk CSV import, even when it clearly overdraws the envelope', async () => {
+    const account = await createAccount()
+    const envelope = await createEnvelope('Rent')
+    const period = await createPeriod('August', '2026-08-01', '2026-08-31')
+    await setAllocation(period.id, envelope.id, 100)
+
+    const response = await post('/transactions/import', {
+      accountId: account.id,
+      csv: `date,amount,type,envelope\n2026-08-05,50.00,expense,Rent\n`,
+    })
+    expect(response.status).toBe(201)
+    expect(outboxRows()).toHaveLength(0)
+  })
+
+  it('accounts for a rolled-over surplus from a prior ended period', async () => {
+    const account = await createAccount()
+    const envelope = await createEnvelope('Vacation')
+    const january = await createPeriod('January', '2026-01-01', '2026-01-31')
+    await setAllocation(january.id, envelope.id, 1_000)
+    await expense(account.id, envelope.id, 200, '2026-01-10')
+
+    await createPeriod('August', '2026-08-01', '2026-08-31')
+
+    // available in August = 0 allocated + 800 carried over - spent
+    const withinSurplus = await expense(account.id, envelope.id, 700, '2026-08-05')
+    expect(withinSurplus.status).toBe(201)
+    expect(outboxRows()).toHaveLength(0)
+
+    const overSurplus = await expense(account.id, envelope.id, 200, '2026-08-06')
+    expect(overSurplus.status).toBe(201)
+    expect(outboxRows()).toHaveLength(1)
   })
 })

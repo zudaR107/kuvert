@@ -28,7 +28,10 @@ export const periodSchema = z.object({
 // function when the row was first created (see the PUT handler below) or
 // is a manual/legacy value that shouldn't be silently overwritten. Only
 // the *absence* of a row triggers computing what it should carry over.
-async function computeCarriedOver(userId: string, envelopeId: string, period: Period): Promise<number> {
+// Exported for transactions/router.ts's envelope-overdrawn check, which
+// needs the exact same "available" computation this file already uses
+// for GET /:id/budget - a second implementation would drift.
+export async function computeCarriedOver(userId: string, envelopeId: string, period: Period): Promise<number> {
   const envelope = await db.select().from(envelopes).where(eq(envelopes.id, envelopeId)).get()
   if (!envelope?.rolloverEnabled) return 0
 
