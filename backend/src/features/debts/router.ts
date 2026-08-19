@@ -3,13 +3,42 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { eq, and } from 'drizzle-orm'
 import { createId } from '@paralleldrive/cuid2'
+import { randomUUID } from 'node:crypto'
 import { db } from '../../db/index.js'
-import { debts } from '../../db/schema.js'
+import { debts, notificationOutbox } from '../../db/schema.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { isoDateSchema } from '../../utils/date.js'
 
 const router = new Hono()
 router.use('*', requireAuth)
+
+// Inserted in the same db.transaction() as the settled flip (see the PUT
+// route below) - mirrors goals/router.ts's insertGoalCompletionEvent, so
+// the event can never drift out of sync with the domain change that
+// caused it.
+function insertDebtSettledEvent(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  userId: string,
+  counterparty: string,
+): void {
+  const id = randomUUID()
+  const now = Date.now()
+  tx.insert(notificationOutbox).values({
+    id,
+    eventType: 'kuvert.debt.paid_off.v1',
+    userId,
+    payload: JSON.stringify({ recipientId: userId, counterparty }),
+    correlationId: id,
+    state: 'pending',
+    createdAt: now,
+    attempts: 0,
+    nextAttemptAt: now,
+    leaseId: null,
+    leaseUntil: null,
+    deliveredAt: null,
+    lastError: null,
+  }).run()
+}
 
 export const debtSchema = z.object({
   counterparty: z.string().min(1).max(100),
@@ -49,11 +78,21 @@ router.put('/:id', zValidator('json', debtUpdateSchema), async (c) => {
   const user = c.get('user')
   const { id } = c.req.param()
   const data = c.req.valid('json')
-  const existing = await db.select().from(debts)
-    .where(and(eq(debts.id, id), eq(debts.userId, user.id))).get()
-  if (!existing) return c.json({ error: 'Not found' }, 404)
-  await db.update(debts).set(data).where(eq(debts.id, id))
-  return c.json({ ...existing, ...data })
+
+  const updated = db.transaction((tx) => {
+    const existing = tx.select().from(debts)
+      .where(and(eq(debts.id, id), eq(debts.userId, user.id))).get()
+    if (!existing) return null
+
+    tx.update(debts).set(data).where(eq(debts.id, id)).run()
+    if (!existing.settled && data.settled === true) {
+      insertDebtSettledEvent(tx, user.id, data.counterparty ?? existing.counterparty)
+    }
+    return { ...existing, ...data }
+  })
+
+  if (!updated) return c.json({ error: 'Not found' }, 404)
+  return c.json(updated)
 })
 
 router.delete('/:id', async (c) => {
