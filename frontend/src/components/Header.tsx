@@ -4,6 +4,7 @@ import {
   Header as SharedHeader,
   normalizeNotificationOrigin,
   ThemeToggle,
+  useAvatarUrl,
   useUnreadNotifications,
 } from '@zudar107/schloss-ui'
 import { buildSchluesselAccountUrl } from '../lib/authRedirect'
@@ -14,6 +15,7 @@ import { apiClient } from '../lib/api'
 // VITE_SCHLUSSEL_URL, which points the other way (to the login page).
 const DEFAULT_SCHLOSS_URL = 'http://localhost:3000'
 const DEFAULT_GLOCKE_URL = 'http://localhost:5177'
+const DEFAULT_SCHLUSSEL_URL = 'http://localhost:4001'
 
 interface HeaderProps {
   user: AuthUser | null
@@ -30,9 +32,15 @@ export function Header({ user, onLogout, onOpenMobileMenu }: HeaderProps) {
   const [loggingOut, setLoggingOut] = useState(false)
   const schlossUrl = (import.meta.env.VITE_SCHLOSS_URL as string | undefined) ?? DEFAULT_SCHLOSS_URL
   const glockeUrl = (import.meta.env.VITE_GLOCKE_URL as string | undefined) ?? DEFAULT_GLOCKE_URL
+  const schluesselUrl = (import.meta.env.VITE_SCHLUSSEL_URL as string | undefined) ?? DEFAULT_SCHLUSSEL_URL
   const notificationOrigin = normalizeNotificationOrigin(glockeUrl)
   const notificationState = useUnreadNotifications({
     glockeOrigin: glockeUrl,
+    userId: loggingOut ? null : user?.id ?? null,
+    apiClient,
+  })
+  const avatarUrl = useAvatarUrl({
+    schluesselOrigin: schluesselUrl,
     userId: loggingOut ? null : user?.id ?? null,
     apiClient,
   })
@@ -56,7 +64,7 @@ export function Header({ user, onLogout, onOpenMobileMenu }: HeaderProps) {
       }
       homeHref={schlossUrl}
       homeTitle="На главную"
-      user={user}
+      user={user ? { ...user, avatarUrl } : null}
       // The header's gear icon opens the platform-wide account settings
       // hosted on schlussel (password, delete account, ...) - NOT
       // kuvert's own /settings route, which is service-specific
